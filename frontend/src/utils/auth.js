@@ -102,22 +102,62 @@ export const apiCall = async (endpoint, method = 'GET', data = null) => {
   const options = {
     method,
     credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
   };
   
   if (data) {
     options.body = JSON.stringify(data);
   }
   
-  try {
-    // For GitHub Pages, don't use authFetch to avoid authentication issues
-    if (isGitHubPages || getCurrentUser()?.isGuest) {
-      options.headers = {
-        'Content-Type': 'application/json',
-      };
-      return await fetch(url, options);
-    } else {
-      return await authFetch(url, options);
+  // Add authentication headers if needed
+  if (!isGitHubPages && !getCurrentUser()?.isGuest) {
+    const token = getAuthToken();
+    if (token) {
+      options.headers['Authorization'] = `Bearer ${token}`;
     }
+  }
+  
+  try {
+    console.log(`Making API request to ${url}`, { method, data });
+    
+    const response = await fetch(url, options);
+    
+    // Log response info for debugging
+    console.log(`Received response from ${url}:`, {
+      status: response.status,
+      ok: response.ok,
+      statusText: response.statusText
+    });
+    
+    // For JSON parsing errors, capture the response text and log it
+    if (response.ok) {
+      try {
+        // Clone the response so we can both read the text and parse JSON
+        const clonedResponse = response.clone();
+        const textResponse = await clonedResponse.text();
+        
+        // Check if the text is empty
+        if (!textResponse || textResponse.trim() === '') {
+          console.error(`Empty response from ${url}`);
+          throw new Error('Received empty response from server');
+        }
+        
+        // Check if it's valid JSON by parsing it
+        try {
+          JSON.parse(textResponse);
+        } catch (e) {
+          console.error(`Invalid JSON response from ${url}:`, textResponse);
+          throw new Error('Invalid JSON response from server');
+        }
+      } catch (jsonError) {
+        console.error('JSON parsing test failed:', jsonError);
+        // Continue with the original response - the actual parsing will happen in the component
+      }
+    }
+    
+    return response;
   } catch (error) {
     console.error(`API call error to ${url}:`, error);
     

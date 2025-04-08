@@ -102,6 +102,8 @@ function App() {
   const [conversationId, setConversationId] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [debugMode, setDebugMode] = useState(false);
+  const [debugInfo, setDebugInfo] = useState(null);
 
   // Initialize conversation ID and check authentication status
   useEffect(() => {
@@ -368,27 +370,40 @@ function App() {
       console.log('Received data:', data); // Log the response data
       
       // Map responses to message objects
-      // Handle both authenticated API format (data.answers) and public API format (data.responses)
+      // Handle different API response formats
       let responseArray = [];
       
+      if (!data) {
+        throw new Error("Received empty response from server");
+      }
+      
       // For authenticated API response
-      if (data.answers) {
+      if (data.answers && Array.isArray(data.answers)) {
         responseArray = data.answers;
       } 
       // For public API response
-      else if (data.responses) {
+      else if (data.responses && Array.isArray(data.responses)) {
         responseArray = data.responses;
         
         // If there are additional rounds, flatten them 
-        if (data.additional_rounds && data.additional_rounds.length > 0) {
+        if (data.additional_rounds && Array.isArray(data.additional_rounds)) {
           // Flatten the additional rounds
           const additionalResponses = data.additional_rounds.flat();
           responseArray = [...responseArray, ...additionalResponses];
         }
       }
+      // If we have an array directly (shouldn't happen but just in case)
+      else if (Array.isArray(data)) {
+        responseArray = data;
+      }
       // Fallback if no response structure matches
       else {
+        console.error("Unexpected API response format:", data);
         throw new Error("Unexpected response format from API");
+      }
+      
+      if (responseArray.length === 0) {
+        throw new Error("Received empty response array from server");
       }
       
       // Now use the combined responseArray
@@ -397,7 +412,7 @@ function App() {
         personaId: answer.agent,
         content: answer.response,
         timestamp: new Date().toISOString(),
-        conversationId: data.conversation_id,
+        conversationId: data.conversation_id || conversationId,
         displayedContent: '', // Initialize with empty string for animation
         fullContent: answer.response // Store the full content
       }));
@@ -466,6 +481,12 @@ function App() {
         }
       }
       
+      setDebugInfo({
+        responseStatus: response.status,
+        responseData: data,
+        responseArray: responseArray
+      });
+      
       setAnimatingText(false);
     } catch (error) {
       console.error('Error in handleSubmit:', error);
@@ -516,6 +537,27 @@ function App() {
       getPersonaName(personaId).toLowerCase().includes(mentionSearch.toLowerCase())
     );
   };
+
+  const toggleDebugMode = () => {
+    setDebugMode(!debugMode);
+  };
+
+  // Add this effect to toggle debug mode with CTRL+SHIFT+D
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Check for Ctrl+Shift+D (Debug mode toggle)
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        e.preventDefault();
+        toggleDebugMode();
+        console.log('Debug mode toggled:', !debugMode);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [debugMode]);
 
   // If not authenticated, show the Login component
   if (!authenticated) {
@@ -786,6 +828,31 @@ function App() {
           )}
         </div>
       )}
+
+      {debugMode && debugInfo && (
+        <div className="debug-panel">
+          <h3>Debug Information</h3>
+          <div>
+            <strong>Response Status:</strong> {debugInfo.responseStatus}
+          </div>
+          <div>
+            <strong>Response Data:</strong>
+            <pre>{JSON.stringify(debugInfo.responseData, null, 2)}</pre>
+          </div>
+          <div>
+            <strong>Processed Response Array:</strong>
+            <pre>{JSON.stringify(debugInfo.responseArray, null, 2)}</pre>
+          </div>
+          <button onClick={() => setDebugInfo(null)}>Clear</button>
+        </div>
+      )}
+
+      {/* Debug Mode Toggle (hidden but can be enabled with keyboard shortcut) */}
+      <div className="debug-toggle" style={{ display: 'none' }}>
+        <button onClick={toggleDebugMode}>
+          {debugMode ? 'Disable Debug' : 'Enable Debug'}
+        </button>
+      </div>
     </div>
   );
 }

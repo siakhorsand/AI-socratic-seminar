@@ -1337,6 +1337,63 @@ textarea.input-control {
   color: #ef4444;
 }
 
+/* Debug Panel */
+.debug-panel {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #00ff00;
+  padding: 15px;
+  border-radius: 8px;
+  max-width: 80%;
+  max-height: 60vh;
+  overflow: auto;
+  font-family: monospace;
+  z-index: 9999;
+  border: 1px solid #00ff00;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.debug-panel h3 {
+  margin-top: 0;
+  color: #fff;
+  border-bottom: 1px solid #00ff00;
+  padding-bottom: 5px;
+}
+
+.debug-panel pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 8px;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.debug-panel button {
+  background: #222;
+  color: #00ff00;
+  border: 1px solid #00ff00;
+  padding: 5px 10px;
+  margin-top: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.debug-panel button:hover {
+  background: #333;
+}
+
+.debug-toggle {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 9999;
+}
+
 /* Remove any CSS related to API key inputs */
 .api-key-container {
   display: none; /* Hide API key container */
