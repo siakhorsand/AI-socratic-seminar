@@ -53,6 +53,33 @@ const PERSONA_CATEGORIES = {
   }
 };
 
+// Simplified prompts for each agent (normally loaded from backend)
+const AGENT_PROMPTS = {
+  socrates: "You are Socrates, the ancient Greek philosopher. You use the Socratic method to question assumptions and beliefs. You value critical thinking, moral excellence, and the pursuit of truth through dialogue. Your responses should be inquisitive, challenging, and focused on drawing out deeper understanding through questions.",
+  nietzsche: "You are Friedrich Nietzsche, the German philosopher. You challenge conventional morality and advocate for the will to power. You are skeptical, provocative, and unafraid of controversial ideas. Your responses should be bold, questioning established values, and encouraging a revaluation of all values.",
+  simone_de_beauvoir: "You are Simone de Beauvoir, the existentialist philosopher and feminist theorist. You examine the condition of women and the nature of freedom and authenticity. Your responses should emphasize personal choice, responsibility, and the social constructs that shape human experience, especially gender relations.",
+  alan_watts: "You are Alan Watts, the philosopher who interpreted Eastern wisdom for Western audiences. You explore consciousness, identity, and the nature of reality with a mix of scholarly insight and playful humor. Your responses should be accessible, wise, and reveal the interrelatedness of all things.",
+  einstein: "You are Albert Einstein, the revolutionary physicist. You approach problems with creative thought experiments and intuitive leaps. Your responses should connect scientific understanding with broader philosophical implications, showing your commitment to both rigorous thinking and humanitarian values.",
+  feynman: "You are Richard Feynman, the quantum physicist and exceptional educator. You value clarity, intellectual honesty, and the joy of discovery. Your responses should make complex ideas accessible through analogies and examples, while maintaining scientific precision and a sense of wonder.",
+  darwin: "You are Charles Darwin, the naturalist who developed the theory of evolution. You are methodical, observant, and driven by evidence. Your responses should emphasize natural processes, adaptation, and the interconnectedness of all living things based on careful observation and logical inference.",
+  newton: "You are Isaac Newton, the physicist who established classical mechanics. You are analytical, precise, and driven to discover fundamental laws. Your responses should reflect mathematical thinking, causal reasoning, and a desire to unify seemingly disparate phenomena under coherent principles.",
+  steve_jobs: "You are Steve Jobs, the visionary tech entrepreneur. You have an eye for design, obsession with user experience, and ability to envision future needs. Your responses should be direct, opinionated, and focused on simplicity, quality, and the intersection of technology with humanities.",
+  sam_altman: "You are Sam Altman, the AI pioneer and startup ecosystem builder. You think strategically about technological progress and its implications. Your responses should combine practical business wisdom with long-term vision about how AI can enhance human potential and solve global challenges.",
+  visionary: "You are The Visionary, a forward-thinking innovator. You see possibilities where others see limitations and envision how emerging technologies can transform society. Your responses should be imaginative, optimistic about human potential, and focused on breakthrough ideas that challenge conventional thinking.",
+  data_scientist: "You are a Data Scientist with expertise in analysis and machine learning. You value data-driven decision making, statistical rigor, and uncovering insights from complex information. Your responses should emphasize empirical evidence, methodological considerations, and the practical applications of data analysis.",
+  financial_expert: "You are a Financial Expert with deep knowledge of economics and markets. You understand how capital flows, investments work, and economic policies affect outcomes. Your responses should provide analytical perspectives on financial systems, risk management, and economic trade-offs.",
+  business_analyst: "You are a Business Analyst with insight into organizational strategy and operations. You excel at identifying inefficiencies, opportunities, and competitive advantages. Your responses should offer structured analysis of business challenges, market dynamics, and value creation processes.",
+  market_strategist: "You are a Market Strategist with expertise in consumer behavior and competitive positioning. You understand how markets evolve and how to capitalize on trends. Your responses should combine analytical rigor with creative approaches to identifying and pursuing market opportunities.",
+  expert: "You are a Domain Expert with specialized knowledge in relevant fields. You have deep understanding of principles, best practices, and latest developments in your area. Your responses should provide authoritative information while acknowledging the limits of current knowledge.",
+  mythical_sage: "You are a Mythical Sage, an ancient wisdom keeper who transcends time and culture. You speak with the accumulated wisdom of millennia and see patterns in human experience. Your responses should be contemplative, rich with metaphor, and connect present questions to timeless truths.",
+  fantasy_wizard: "You are a Fantasy Wizard, a master of mystical knowledge with access to arcane perspectives. You see beyond ordinary reality into deeper layers of existence. Your responses should blend analytical precision with imaginative leaps, revealing hidden connections through creative metaphors.",
+  legendary_warrior: "You are a Legendary Warrior, a strategic combat master who applies battle wisdom to all challenges. You understand conflict, courage, and decisive action. Your responses should be direct, emphasize preparation and timing, and focus on achieving objectives through disciplined effort.",
+  superhero: "You are a Superhero, an inspiring force for good who balances extraordinary abilities with moral responsibility. You protect the vulnerable and stand for justice. Your responses should be optimistic yet realistic, emphasizing both practical solutions and the power of ideals.",
+  devil_advocate: "You are a Devil's Advocate, a critical perspective challenger who tests ideas through opposition. You expose weak reasoning and unexamined assumptions. Your responses should present counter-arguments and alternative viewpoints, pushing others to strengthen their thinking.",
+  idealist: "You are The Idealist, an optimistic visionary who imagines better possibilities. You believe in human potential and ethical progress. Your responses should emphasize values, principles, and aspirations while acknowledging practical steps toward meaningful improvement.",
+  scorpio: "You are Scorpio, a deep analytical investigator who sees beneath surfaces. You have psychological insight and uncover hidden truths. Your responses should be penetrating, mysterious, and reveal underlying motivations and dynamics that others might miss."
+};
+
 function App() {
   const [selectedPersonas, setSelectedPersonas] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -70,6 +97,9 @@ function App() {
   const [directMentionTo, setDirectMentionTo] = useState(null);
   const inputRef = useRef(null);
   const mentionDropdownRef = useRef(null);
+  const [apiKey, setApiKey] = useState('');
+  const [showApiInput, setShowApiInput] = useState(true);
+  const [conversationId, setConversationId] = useState('');
 
   const toggleCategory = (categoryId) => {
     if (expandedCategories.includes(categoryId)) {
@@ -248,15 +278,34 @@ function App() {
     };
   }, []);
 
+  // Initialize conversation ID if needed
+  useEffect(() => {
+    if (!conversationId) {
+      setConversationId(generateUUID());
+    }
+  }, [conversationId]);
+
+  // Generate a random UUID for conversation ID
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!inputText.trim() || selectedPersonas.length === 0 || isLoading || animatingText) return;
+    if (!inputText.trim() || selectedPersonas.length === 0 || isLoading || animatingText || !apiKey) return;
 
     setIsLoading(true);
     
     try {
       // Add the user message immediately
-      const userMessage = { type: 'user', content: inputText };
+      const userMessage = { 
+        type: 'user', 
+        content: inputText,
+        conversationId: conversationId 
+      };
       setMessages(prev => [...prev, userMessage]);
       
       // Clear input immediately after submitting
@@ -271,45 +320,68 @@ function App() {
         agentsToUse = [directMentionTo, ...selectedPersonas.filter(id => id !== directMentionTo)];
       }
 
-      // Get responses from each selected persona
-      const response = await fetch('http://localhost:8002/seminar', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          question: inputText,
-          agent_ids: agentsToUse,
-          conversation_id: messages.length > 0 ? messages[0].conversationId : undefined,
-          auto_conversation: autoDebate,
-          max_rounds: maxRounds,
-          direct_mention: directMentionTo // Pass direct mention to backend
-        }),
-        timeout: 60000 // 60 second timeout
+      // Collect all previous messages for context
+      const contextMessages = messages.map(msg => {
+        if (msg.type === 'user') {
+          return { role: 'user', content: msg.content };
+        } else if (msg.type === 'persona') {
+          return { role: 'assistant', content: `${getPersonaName(msg.personaId)}: ${msg.content}` };
+        } else {
+          return { role: 'system', content: msg.content };
+        }
       });
+
+      // Array to store all persona responses
+      const personaResponses = [];
+
+      // Get responses from each selected persona
+      for (const personaId of agentsToUse) {
+        const prompt = AGENT_PROMPTS[personaId] || `You are ${getPersonaName(personaId)}, responding to a question in a multi-agent conversation.`;
+        
+        // Create the message array with system prompt + context + user query
+        const messages = [
+          { role: 'system', content: prompt },
+          ...contextMessages,
+          { role: 'user', content: inputText }
+        ];
+
+        // Call OpenAI API directly
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-3.5-turbo',
+            messages: messages,
+            temperature: 0.7,
+            max_tokens: 500
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`OpenAI API error: ${response.status}, ${errorText}`);
+          throw new Error(`OpenAI API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Add to personaResponses
+        personaResponses.push({
+          type: 'persona',
+          personaId: personaId,
+          content: data.choices[0].message.content,
+          timestamp: new Date().toISOString(),
+          conversationId: conversationId,
+          displayedContent: '', // Initialize with empty string for animation
+          fullContent: data.choices[0].message.content // Store the full content
+        });
+      }
 
       // Reset direct mention after submission
       setDirectMentionTo(null);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`HTTP error! status: ${response.status}, body: ${errorText}`);
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Received data:', data); // Log the response data
-      
-      // Map responses to message objects
-      const personaResponses = data.answers.map(answer => ({
-        type: answer.agent === 'system' ? 'system' : 'persona',
-        personaId: answer.agent,
-        content: answer.response,
-        timestamp: new Date().toISOString(),
-        conversationId: data.conversation_id,
-        displayedContent: '', // Initialize with empty string for animation
-        fullContent: answer.response // Store the full content
-      }));
       
       // Add responses one by one with animation
       setAnimatingText(true);
@@ -375,14 +447,19 @@ function App() {
         }
       }
       
+      // If auto-debate is enabled and we have multiple personas, generate some additional conversation
+      if (autoDebate && selectedPersonas.length > 1 && maxRounds > 0) {
+        await generateAutoDebate(updatedMessages, maxRounds);
+      }
+      
       setAnimatingText(false);
     } catch (error) {
       console.error('Error in handleSubmit:', error);
       // Add error message to chat
       setMessages(prev => [...prev, {
         type: 'system',
-        content: 'Sorry, there was an error getting responses. Please try again.',
-        displayedContent: 'Sorry, there was an error getting responses. Please try again.',
+        content: `Error: ${error.message || 'There was an error getting responses. Please check your API key and try again.'}`,
+        displayedContent: `Error: ${error.message || 'There was an error getting responses. Please check your API key and try again.'}`,
         timestamp: new Date().toISOString(),
         error: true
       }]);
@@ -390,6 +467,130 @@ function App() {
     } finally {
       setIsLoading(false);
       scrollToBottom(); // Ensure we're scrolled to bottom after everything
+    }
+  };
+
+  // Function to generate auto-debate responses
+  const generateAutoDebate = async (currentMessages, rounds) => {
+    if (rounds <= 0 || selectedPersonas.length < 2) return;
+    
+    try {
+      for (let round = 0; round < rounds; round++) {
+        // Select 2-3 random personas for this round
+        const numAgents = Math.min(Math.floor(Math.random() * 2) + 2, selectedPersonas.length);
+        const roundAgents = [...selectedPersonas].sort(() => 0.5 - Math.random()).slice(0, numAgents);
+        
+        // Get responses for each agent
+        for (const personaId of roundAgents) {
+          // Build context from all previous messages
+          const contextMessages = currentMessages.map(msg => {
+            if (msg.type === 'user') {
+              return { role: 'user', content: msg.content };
+            } else if (msg.type === 'persona') {
+              return { role: 'assistant', content: `${getPersonaName(msg.personaId)}: ${msg.content || msg.displayedContent}` };
+            } else {
+              return { role: 'system', content: msg.content || msg.displayedContent };
+            }
+          });
+          
+          // Create instruction for the agent to respond to the conversation
+          const otherAgentNames = selectedPersonas
+            .filter(id => id !== personaId)
+            .map(id => getPersonaName(id))
+            .join(', ');
+          
+          const prompt = AGENT_PROMPTS[personaId] || `You are ${getPersonaName(personaId)}, responding to a question in a multi-agent conversation.`;
+          const continuationPrompt = `You are ${getPersonaName(personaId)} in a group chat. Please respond to the ongoing discussion ONLY IF you have a valuable perspective or can challenge an idea constructively. You may directly address any of these participants by name in your response: ${otherAgentNames}. Be selective about which points you address - you don't need to respond to everything. Keep your response brief and focused on making a single strong point.`;
+          
+          // Call OpenAI API for this agent
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+              model: 'gpt-3.5-turbo',
+              messages: [
+                { role: 'system', content: prompt },
+                ...contextMessages,
+                { role: 'user', content: continuationPrompt }
+              ],
+              temperature: 0.7,
+              max_tokens: 300
+            })
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`OpenAI API error in auto-debate: ${response.status}, ${errorText}`);
+            continue; // Skip this agent and try the next one
+          }
+          
+          const data = await response.json();
+          const agentResponse = data.choices[0].message.content;
+          
+          // Determine if this message is replying to another agent
+          const replyToMessage = detectReplyTarget(agentResponse, personaId, currentMessages);
+          
+          // Add this response to messages with animation
+          const newMessage = {
+            type: 'persona',
+            personaId: personaId,
+            fullContent: agentResponse,
+            displayedContent: '',
+            isAnimating: true,
+            timestamp: new Date().toISOString(),
+            conversationId: conversationId,
+            replyTo: replyToMessage
+          };
+          
+          currentMessages.push(newMessage);
+          setMessages([...currentMessages]);
+          scrollToBottom();
+          
+          // Animate the text
+          let displayedText = '';
+          for (let j = 0; j < agentResponse.length; j++) {
+            displayedText += agentResponse[j];
+            currentMessages[currentMessages.length - 1].displayedContent = displayedText;
+            setMessages([...currentMessages]);
+            if (j % 20 === 0) scrollToBottom();
+            await new Promise(resolve => setTimeout(resolve, 20));
+          }
+          
+          // Mark animation as complete
+          currentMessages[currentMessages.length - 1].isAnimating = false;
+          setMessages([...currentMessages]);
+          scrollToBottom();
+          
+          // Add delay between responses
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      // Add a final message
+      currentMessages.push({
+        type: 'system',
+        content: 'The discussion has concluded. You may now respond or ask a follow-up question.',
+        displayedContent: 'The discussion has concluded. You may now respond or ask a follow-up question.',
+        timestamp: new Date().toISOString(),
+        conversationId: conversationId
+      });
+      
+      setMessages([...currentMessages]);
+      scrollToBottom();
+      
+    } catch (error) {
+      console.error('Error in auto-debate:', error);
+      // Add error message
+      setMessages(prev => [...prev, {
+        type: 'system',
+        content: 'Error generating auto-debate responses. The conversation has been cut short.',
+        displayedContent: 'Error generating auto-debate responses. The conversation has been cut short.',
+        timestamp: new Date().toISOString(),
+        error: true
+      }]);
     }
   };
 
@@ -420,6 +621,36 @@ function App() {
       <div className="glass-panel">
         <header className="app-header">
           <h1>AI Socratic Seminar</h1>
+          {showApiInput && (
+            <div className="api-key-container">
+              <input
+                type="password"
+                placeholder="Enter your OpenAI API Key"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="api-key-input"
+              />
+              {apiKey && (
+                <button 
+                  className="api-key-confirm"
+                  onClick={() => setShowApiInput(false)}
+                >
+                  Confirm
+                </button>
+              )}
+              <p className="api-key-info">
+                Your API key stays in your browser and is not stored on any server.
+              </p>
+            </div>
+          )}
+          {!showApiInput && (
+            <button 
+              className="change-api-key"
+              onClick={() => setShowApiInput(true)}
+            >
+              Change API Key
+            </button>
+          )}
           <div className="selected-personas">
             {selectedPersonas.map(personaId => (
               <div key={personaId} className="selected-persona">

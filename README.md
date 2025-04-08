@@ -9,6 +9,37 @@ An interactive platform for multi-agent philosophical and intellectual discussio
 - Real-time response generation
 - Categories include Philosophers, Scientists, Strategists, Critics, and Innovators
 
+## GitHub Pages Version (New!)
+
+A simplified version of the AI Socratic Seminar is now available on GitHub Pages. This version:
+
+- Runs entirely in your browser with no backend server required
+- Uses your own OpenAI API key to make direct API calls
+- Includes all the same personas and conversation features
+- Works on any device with a modern web browser
+
+**[Access the GitHub Pages version here](https://siakhorsand.github.io/ai-socratic-seminar/)**
+
+### Using the GitHub Pages Version
+
+1. Visit the link above
+2. Enter your OpenAI API key when prompted
+   - Your key is stored only in your browser and is never sent to our servers
+   - You can get an API key from [OpenAI's platform](https://platform.openai.com/api-keys)
+3. Select personas and start a conversation
+4. Enjoy the same multi-agent experience without any installation!
+
+### GitHub Pages vs Full Version
+
+| Feature | GitHub Pages | Full Version |
+|---------|-------------|--------------|
+| Installation Required | No | Yes |
+| API Key Management | User provided | Server managed |
+| Custom Backend Logic | No | Yes |
+| Conversation Storage | Browser only | Server-side |
+| Agent Customization | Limited | Full |
+| Performance | Depends on client | Optimized |
+
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
@@ -17,7 +48,9 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 Copyright 2025 Sia Khorsand
 
-## Quick Start
+## Full Installation
+
+If you want the complete experience with backend support, follow these instructions:
 
 ### Option 1: One-Command Startup
 
