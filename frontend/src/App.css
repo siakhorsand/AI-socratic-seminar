@@ -1529,7 +1529,7 @@ textarea.input-control {
 }
 
 /* Animations */
-@keyframes fadeInUp {
+@keyframes fadeIn {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -1540,644 +1540,69 @@ textarea.input-control {
   }
 }
 
-/* Adding style for direct mentions in message content */
-.direct-mention {
-  color: var(--primary-light);
-  font-weight: 500;
-}
-
-/* Make sure persona initial styles are consistent */
-.persona-initial {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(91, 33, 182, 0.7));
-  color: white;
-  font-weight: 500;
-  font-size: 1rem;
-  flex-shrink: 0;
-}
-
-/* Category arrow styling */
-.personas-bin .category-arrow {
-  width: 0.75rem;
-  height: 0.75rem;
-  position: relative;
-  transition: transform 0.3s ease;
-}
-
-.personas-bin .category-button.expanded .category-arrow {
-  transform: rotate(180deg);
-}
-
-.personas-bin .category-arrow::before,
-.personas-bin .category-arrow::after {
-  content: '';
-  position: absolute;
-  background: white;
-  top: 50%;
-  width: 0.75rem;
-  height: 0.125rem;
-  border-radius: 1px;
-  transition: all 0.3s ease;
-}
-
-.personas-bin .category-arrow::before {
-  left: 0;
-  transform: translateY(-50%) rotate(45deg);
-  transform-origin: center;
-}
-
-.personas-bin .category-arrow::after {
-  right: 0;
-  transform: translateY(-50%) rotate(-45deg);
-  transform-origin: center;
-}
-
-/* Header styling */
-.personas-bin-header h3 {
-  font-size: 1.2rem;
-  font-weight: 500;
-  color: white;
-  margin: 0;
-  letter-spacing: 0.02em;
-}
-
-.close-bin {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 50%;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1.2rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0;
-  margin: 0;
-  transition: all 0.2s ease;
-}
-
-.close-bin:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: white;
-  transform: rotate(90deg);
-}
-
-/* Add styles for the header with user info */
-.header-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  margin-bottom: 1rem;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 5px 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 100px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.2s ease;
-}
-
-.user-info:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.user-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.user-name {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 150px;
-}
-
-.logout-button {
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.8rem;
-  cursor: pointer;
-  padding: 0 5px;
-  transition: color 0.2s ease;
-}
-
-.logout-button:hover {
-  color: #ef4444;
-}
-
-/* Debug Panel */
-.debug-panel {
-  position: fixed;
-  bottom: 10px;
-  right: 10px;
-  background: rgba(0, 0, 0, 0.8);
-  color: #00ff00;
-  padding: 15px;
-  border-radius: 8px;
-  max-width: 80%;
-  max-height: 60vh;
-  overflow: auto;
-  font-family: monospace;
-  z-index: 9999;
-  border: 1px solid #00ff00;
-  box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-}
-
-.debug-panel h3 {
-  margin-top: 0;
-  color: #fff;
-  border-bottom: 1px solid #00ff00;
-  padding-bottom: 5px;
-}
-
-.debug-panel pre {
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-size: 11px;
-  background: rgba(0, 0, 0, 0.5);
-  padding: 8px;
-  border-radius: 4px;
-  max-height: 200px;
-  overflow: auto;
-}
-
-.debug-panel button {
-  background: #222;
-  color: #00ff00;
-  border: 1px solid #00ff00;
-  padding: 5px 10px;
-  margin-top: 10px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.debug-panel button:hover {
-  background: #333;
-}
-
-.debug-toggle {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  z-index: 9999;
-}
-
-/* Loading message styling */
-.loading-message {
-  display: flex;
-  align-items: center;
-}
-
-.loading-dots {
-  margin-left: 8px;
-  position: relative;
-  width: 24px;
-  height: 16px;
-}
-
-.loading-dots::after {
-  content: "...";
-  font-size: 20px;
-  color: var(--primary-light);
-  animation: dots 1.5s infinite;
-  position: absolute;
-  top: -5px;
-}
-
-@keyframes dots {
-  0%, 20% {
-    color: rgba(255, 255, 255, 0);
-    text-shadow: 0.25em 0 0 rgba(255, 255, 255, 0), 0.5em 0 0 rgba(255, 255, 255, 0);
-  }
-  40% {
-    color: white;
-    text-shadow: 0.25em 0 0 rgba(255, 255, 255, 0), 0.5em 0 0 rgba(255, 255, 255, 0);
-  }
-  60% {
-    text-shadow: 0.25em 0 0 white, 0.5em 0 0 rgba(255, 255, 255, 0);
-  }
-  80%, 100% {
-    text-shadow: 0.25em 0 0 white, 0.5em 0 0 white;
-  }
-}
-
-.system-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: none;
-}
-
-.system-message.loading {
-  background: rgba(59, 130, 246, 0.2);
-}
-
-.system-indicator:contains('⟳') {
-  animation: spin 2s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Updated selector for rotating indicator since :contains is not supported in standard CSS */
-.system-indicator.loading-indicator {
-  animation: spin 2s linear infinite;
-}
-
-/* Remove any CSS related to API key inputs */
-.api-key-container {
-  display: none; /* Hide API key container */
-}
-
-/* Question Response Styling */
-.answering-question {
-  margin-left: 3rem;
-  position: relative;
-  animation: slideInRight 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.answering-question::before {
-  content: '';
-  position: absolute;
-  left: -25px;
-  top: 0;
-  height: calc(100% - 10px);
-  width: 2px;
-  background: linear-gradient(to bottom, rgba(138, 43, 226, 0.7), rgba(138, 43, 226, 0.1));
-  border-radius: 1px;
-}
-
-.question-response-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.8);
-  animation: fadeInDown 0.3s ease-out;
-}
-
-.question-icon {
-  font-size: 0.9rem;
-  color: #9f7aea;
-  margin-right: 4px;
-  animation: pulse 2s infinite;
-}
-
-.answering-text {
-  font-style: italic;
-  background: linear-gradient(to right, #9f7aea, #667eea);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  font-weight: 500;
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-}
-
-/* Chat Container Styles - hidden until first message */
-.chat-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 1rem;
-  overflow-y: auto;
-  position: relative;
-  transition: opacity 0.5s ease, transform 0.5s ease;
-}
-
-.chat-container.empty {
-  opacity: 0.5;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.chat-container.has-messages {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 3rem;
-  color: var(--text-secondary);
-  height: 100%;
-}
-
-.empty-state-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
-}
-
-.empty-state h3 {
-  font-size: 1.5rem;
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-  background: linear-gradient(to right, var(--gradient-start), var(--gradient-end));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.empty-state p {
-  font-size: 1rem;
-  max-width: 400px;
-}
-
-/* Enhanced message styling */
-.message-container {
-  display: flex;
-  flex-direction: column;
-  max-width: 90%;
-  margin: 0.5rem 0;
-  padding: 0.75rem 1rem;
-  border-radius: 18px;
-  animation: message-appear 0.3s ease forwards;
-  position: relative;
-  transform-origin: top left;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: all 0.3s ease;
-}
-
-.message-container.user {
-  align-self: flex-end;
-  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
-  color: white;
-  border-bottom-right-radius: 4px;
-  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
-  margin-left: auto;
-}
-
-.message-container.persona {
-  align-self: flex-start;
-  background: rgba(60, 60, 65, 0.6);
-  color: var(--text);
-  border-bottom-left-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  margin-right: auto;
-}
-
-.message-container.system {
-  align-self: center;
-  background: rgba(40, 40, 45, 0.5);
-  color: var(--text-secondary);
-  font-style: italic;
-  max-width: 85%;
-  border-radius: 12px;
-  box-shadow: none;
-}
-
-.message-container.highlighted-reply {
-  background: rgba(94, 92, 230, 0.2);
-  box-shadow: 0 0 0 1px rgba(94, 92, 230, 0.3);
-}
-
-.message-container.animating {
-  position: relative;
-}
-
-.message-container.animating::after {
-  content: '';
-  position: absolute;
-  right: 0.5rem;
-  bottom: 0.5rem;
-  width: 6px;
-  height: 6px;
-  background-color: var(--primary-light);
-  border-radius: 50%;
-  animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-  0% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.5); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-.message-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-  font-size: 0.85rem;
-}
-
-.message-sender {
-  font-weight: 600;
-  color: inherit;
-}
-
-.message-time {
-  font-size: 0.7rem;
-  opacity: 0.7;
-  margin-left: 0.5rem;
-}
-
-.message-content {
-  word-break: break-word;
-  line-height: 1.5;
-}
-
-/* Enhanced reply styling with animations */
-.reply-indicator {
-  display: flex;
-  align-items: flex-start;
-  margin-bottom: 0.5rem;
-  padding: 0.5rem;
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 8px;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-
-.reply-indicator:hover {
-  background: rgba(0, 0, 0, 0.25);
-}
-
-.reply-line {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--primary);
-  border-radius: 3px;
-}
-
-.reply-preview {
-  display: flex;
-  flex-direction: column;
-  margin-left: 10px;
-  font-size: 0.85rem;
-  opacity: 0.85;
-}
-
-.reply-to-name {
-  font-weight: 600;
-  color: var(--primary-light);
-  margin-bottom: 0.2rem;
-}
-
-.reply-snippet {
-  opacity: 0.7;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 200px;
-}
-
-.has-reply {
-  animation: highlight-reply 1s ease;
-}
-
-@keyframes highlight-reply {
-  0% { box-shadow: 0 0 0 2px var(--primary); }
-  70% { box-shadow: 0 0 0 2px var(--primary); }
-  100% { box-shadow: none; }
-}
-
-@keyframes message-appear {
+@keyframes fadeOut {
   from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* Messages List */
-.messages-list {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding-bottom: 1rem;
-}
-
-/* Loading animation for typing */
-.typing-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0.5rem 0;
-}
-
-.typing-indicator span {
-  height: 8px;
-  width: 8px;
-  background: var(--primary-light);
-  border-radius: 50%;
-  display: inline-block;
-  margin-right: 5px;
-  animation: typing-bounce 1.4s infinite ease-in-out both;
-}
-
-.typing-indicator span:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.typing-indicator span:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-@keyframes typing-bounce {
-  0%, 80%, 100% { 
-    transform: scale(0.6);
-    opacity: 0.5;
-  }
-  40% { 
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-/* Persona status indicators */
-.persona-status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-}
-
-.check-icon {
-  color: var(--success);
-  font-weight: bold;
-}
-
-.plus-icon {
-  color: var(--primary-light);
-  font-size: 16px;
-}
-
-/* Improved Personas Bin */
-.personas-bin {
-  background: rgba(25, 25, 27, 0.8);
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  max-height: 70vh;
-  width: 100%;
-  margin-bottom: 1rem;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: var(--card-shadow);
-  z-index: 100;
-  overflow: hidden;
-  animation: slide-down 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes slide-down {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
     opacity: 1;
     transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* Animation delays for loading dots */
+.animation-delay-200 {
+  animation-delay: 0.2s;
+}
+
+.animation-delay-400 {
+  animation-delay: 0.4s;
+}
+
+/* Legacy styles for compatibility */
+.is-replied-to {
+  position: relative;
+}
+
+.is-replied-to::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 20px;
+  height: 8px;
+  width: 2px;
+  background-color: rgba(97, 27, 248, 0.5);
+}
+
+/* Styles for the personas bin - animated transitions */
+.category-section {
+  margin-bottom: 0.5rem;
+}
+
+.personas-bin {
+  overflow-y: auto;
+}
+
+/* Additional styling for the mention dropdown that isn't covered by Tailwind */
+.mention-dropdown {
+  z-index: 9999;
+}
+
+/* Hover effects not covered by Tailwind */
+.mention-item:hover {
+  background-color: rgba(97, 27, 248, 0.1);
+}
+
+/* Fallback animations for browsers that don't support Tailwind's extended animations */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(97, 27, 248, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(97, 27, 248, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(97, 27, 248, 0);
   }
 } 

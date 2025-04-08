@@ -823,144 +823,304 @@ IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
   }
 
   return (
-    <div className="app-container">
-      <div className="glass-panel">
-        <header className="app-header">
-          <div className="header-top">
-            <h1>AI Socratic Seminar</h1>
-            <div className="user-info">
-              {user ? (
-                <>
-                  {user.picture && <img src={user.picture} alt={user.name} className="user-avatar" />}
-                  <span className="user-name">{user.name}</span>
-                  <button className="logout-button" onClick={handleLogout}>
-                    Sign Out
-                  </button>
-                </>
+    <div id="webcrumbs" className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-white font-sans overflow-hidden">
+      {/* Header */}
+      <header className="border-b border-primary-800/20 backdrop-blur-md bg-black/20 p-6 flex justify-between items-center">
+        <div className="flex items-center gap-4">
+          <svg
+            className="w-10 h-10 text-primary-500"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M7.5 12C7.5 12 9 9 12 9C15 9 16.5 12 16.5 12C16.5 12 15 15 12 15C9 15 7.5 12 7.5 12Z"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <circle
+              cx="12"
+              cy="12"
+              r="2"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <h1 className="text-2xl font-semibold tracking-tight">AI Socratic Seminar</h1>
+        </div>
+        <div className="flex items-center gap-6">
+          {user ? (
+            <div className="flex items-center gap-4">
+              {user.picture ? (
+                <img 
+                  src={user.picture} 
+                  alt={user.name} 
+                  className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center overflow-hidden ring-2 ring-primary-500/20 hover:ring-primary-500/50 transition-all cursor-pointer"
+                />
               ) : (
-                <button className="login-button" onClick={() => setAuthenticated(false)}>
-                  Log In
-                </button>
-              )}
-            </div>
-          </div>
-          {hasMessages && (
-            <div className="selected-personas">
-              {selectedPersonas.map(personaId => (
-                <div key={personaId} className="selected-persona">
-                  <div className="persona-initial">
-                    {getPersonaName(personaId).charAt(0)}
-                  </div>
-                  <span className="selected-persona-name">{getPersonaName(personaId)}</span>
-                  <button 
-                    className="remove-persona" 
-                    onClick={() => togglePersona(personaId)}
-                    aria-label={`Remove ${getPersonaName(personaId)}`}
-                  >
-                    ×
-                  </button>
+                <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center overflow-hidden ring-2 ring-primary-500/20 hover:ring-primary-500/50 transition-all cursor-pointer">
+                  <span className="material-symbols-outlined">person</span>
                 </div>
-              ))}
+              )}
+              <span className="text-sm text-gray-300">{user.name}</span>
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined">logout</span>
+                Sign Out
+              </button>
             </div>
+          ) : (
+            <button 
+              onClick={() => setAuthenticated(false)} 
+              className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors"
+            >
+              <span className="material-symbols-outlined">login</span>
+              Log In
+            </button>
           )}
-        </header>
+        </div>
+      </header>
 
-        <main className={`chat-container ${hasMessages ? 'has-messages' : 'no-messages'}`} ref={chatContainerRef}>
-          {hasMessages ? (
-            <div className="messages-container">
-              <div className="messages-list">
+      {/* Main content */}
+      <main className="relative flex h-[calc(100vh-76px)] overflow-hidden">
+        {/* Main chat area */}
+        <div className="flex-1 flex flex-col dark:bg-gray-900 light:bg-white">
+          <div className="px-6 py-8 flex-1 overflow-y-auto" ref={chatContainerRef}>
+            {!hasMessages ? (
+              // Virtual roundtable - shown when no messages yet
+              <div className="w-full max-w-6xl mx-auto mb-10">
+                <div className="flex justify-center items-center gap-4 mb-8">
+                  <div className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-300 to-primary-500 tracking-tight">
+                    Virtual Roundtable
+                  </div>
+                  <span className="px-3 py-1 text-xs font-medium rounded-full dark:bg-primary-800/30 light:bg-primary-100 dark:text-primary-400 light:text-primary-700 dark:border dark:border-primary-700/30 light:border light:border-primary-200">
+                    {selectedPersonas.length > 0 ? 'Ready to Start' : 'Select Personas'}
+                  </span>
+                </div>
+
+                {/* Persona avatars in circle */}
+                {selectedPersonas.length > 0 ? (
+                  <div className="relative h-[280px] w-[280px] mx-auto mb-12">
+                    <div className="absolute w-full h-full rounded-full dark:border dark:border-gray-700/30 light:border light:border-gray-300/50 animate-pulse"></div>
+
+                    {/* Render personas in a circle */}
+                    {selectedPersonas.map((personaId, index) => {
+                      // Calculate position in a circle
+                      const totalPersonas = selectedPersonas.length;
+                      const angle = (index / totalPersonas) * 2 * Math.PI;
+                      const radius = 120; // Distance from center
+                      const top = 140 + radius * Math.sin(angle);
+                      const left = 140 + radius * Math.cos(angle);
+                      
+                      // Calculate a color based on the persona
+                      const colors = [
+                        "from-blue-500 to-blue-700",
+                        "from-purple-500 to-purple-700",
+                        "from-green-500 to-green-700",
+                        "from-red-500 to-red-700",
+                        "from-yellow-500 to-yellow-700",
+                        "from-cyan-500 to-cyan-700"
+                      ];
+                      const colorIndex = index % colors.length;
+                      
+                      return (
+                        <div 
+                          key={personaId}
+                          className="absolute transform transition-all hover:scale-110" 
+                          style={{ top: `${top}px`, left: `${left}px` }}
+                        >
+                          <div className="relative">
+                            <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${colors[colorIndex]} flex items-center justify-center shadow-lg ring-2 ring-white/10 animate-[pulse_${4 + index * 0.5}s_ease-in-out_infinite]`}>
+                              <span className="material-symbols-outlined">
+                                {personaId.includes('scientist') || personaId === 'einstein' || personaId === 'newton' || personaId === 'feynman' || personaId === 'darwin' ? 'psychology' : 
+                                personaId.includes('philosopher') || personaId === 'socrates' || personaId === 'nietzsche' ? 'school' : 
+                                personaId.includes('innovator') || personaId === 'steve_jobs' || personaId === 'sam_altman' ? 'lightbulb' : 
+                                personaId.includes('expert') ? 'analytics' : 
+                                personaId.includes('advocate') ? 'gavel' :
+                                'person'}
+                              </span>
+                            </div>
+                            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium dark:text-gray-300 light:text-gray-700 whitespace-nowrap">
+                              {getPersonaName(personaId)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Center User Avatar */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 transform transition-all hover:scale-110">
+                      <div className="relative">
+                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary-400 to-primary-700 flex items-center justify-center shadow-lg dark:shadow-primary-900/40 light:shadow-primary-500/40 ring-4 dark:ring-primary-500/30 light:ring-primary-300 animate-[pulse_4s_ease-in-out_infinite] z-20">
+                          <span className="material-symbols-outlined text-xl">person</span>
+                        </div>
+                        <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-sm font-bold dark:text-primary-300 light:text-primary-600 whitespace-nowrap">
+                          You
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-400 mt-10">
+                    Click the <span className="material-symbols-outlined align-middle mx-1">groups</span> button to select personas
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Chat messages - shown when there are messages
+              <div className="w-full max-w-4xl mx-auto mb-24 space-y-8">
                 {messages.map((message, index) => {
-                  // Determine if this message is being replied to by the next message
                   const isRepliedTo = messages.some((m, i) => i > index && m.replyTo === index);
+                  
+                  // Determine color for message sender
+                  let avatarColor = "bg-primary-600";
+                  let textColor = "text-primary-300";
+                  let bgColor = "dark:bg-primary-900/20 light:bg-primary-50";
+                  let borderColor = "dark:border-primary-700/30 light:border-primary-200";
+                  let hoverColor = "dark:hover:bg-primary-900/30 light:hover:bg-primary-100";
+                  
+                  if (message.sender !== 'user' && message.sender !== 'system') {
+                    // Color based on persona type
+                    const personaId = message.sender;
+                    if (personaId.includes('scientist') || personaId === 'einstein' || personaId === 'newton' || personaId === 'feynman' || personaId === 'darwin') {
+                      avatarColor = "bg-blue-600";
+                      textColor = "text-blue-300";
+                      bgColor = "dark:bg-blue-900/10 light:bg-blue-50";
+                      borderColor = "dark:border-blue-700/30 light:border-blue-200";
+                      hoverColor = "dark:hover:bg-blue-900/20 light:hover:bg-blue-100";
+                    } else if (personaId.includes('philosopher') || personaId === 'socrates' || personaId === 'nietzsche') {
+                      avatarColor = "bg-purple-600";
+                      textColor = "text-purple-300";
+                      bgColor = "dark:bg-purple-900/10 light:bg-purple-50";
+                      borderColor = "dark:border-purple-700/30 light:border-purple-200";
+                      hoverColor = "dark:hover:bg-purple-900/20 light:hover:bg-purple-100";
+                    } else if (personaId.includes('innovator') || personaId === 'steve_jobs' || personaId === 'sam_altman') {
+                      avatarColor = "bg-green-600";
+                      textColor = "text-green-300";
+                      bgColor = "dark:bg-green-900/10 light:bg-green-50";
+                      borderColor = "dark:border-green-700/30 light:border-green-200";
+                      hoverColor = "dark:hover:bg-green-900/20 light:hover:bg-green-100";
+                    } else if (personaId.includes('expert')) {
+                      avatarColor = "bg-yellow-600";
+                      textColor = "text-yellow-300";
+                      bgColor = "dark:bg-yellow-900/10 light:bg-yellow-50";
+                      borderColor = "dark:border-yellow-700/30 light:border-yellow-200";
+                      hoverColor = "dark:hover:bg-yellow-900/20 light:hover:bg-yellow-100";
+                    } else if (personaId.includes('advocate')) {
+                      avatarColor = "bg-red-600";
+                      textColor = "text-red-300";
+                      bgColor = "dark:bg-red-900/10 light:bg-red-50";
+                      borderColor = "dark:border-red-700/30 light:border-red-200";
+                      hoverColor = "dark:hover:bg-red-900/20 light:hover:bg-red-100";
+                    }
+                  }
                   
                   return (
                     <div 
                       key={index} 
-                      className={`message ${
-                        message.type === 'user' 
-                          ? 'user-message' 
-                          : message.type === 'system' 
-                            ? 'system-message' 
-                            : 'persona-message'
-                      } ${message.replyTo !== undefined && message.replyTo !== null ? 'reply-message' : ''}
-                      ${isRepliedTo ? 'is-replied-to' : ''}
-                      ${message.isAnsweringQuestion ? 'answering-question' : ''}`}
+                      className={`p-6 rounded-2xl backdrop-blur-lg ${bgColor} dark:border dark:border-white/10 light:border light:border-gray-200 transition-all ${hoverColor} ${message.replyTo !== undefined && message.replyTo !== null ? 'ml-8' : ''} ${isRepliedTo ? 'is-replied-to' : ''}`}
                     >
                       {message.replyTo !== undefined && message.replyTo !== null && (
-                        <div className="reply-indicator">
-                          <div className="reply-line"></div>
-                          <div className="reply-to">
-                            <span className="reply-icon">↩</span>
-                            Replying to {getPersonaName(messages[message.replyTo].personaId)}
-                          </div>
+                        <div className="flex items-center gap-2 mb-3 text-sm text-gray-400">
+                          <span className="material-symbols-outlined text-sm">reply</span>
+                          Replying to {getPersonaName(messages[message.replyTo].sender)}
                         </div>
                       )}
                       
-                      {message.isAnsweringQuestion && (
-                        <div className="question-response-indicator">
-                          <div className="question-icon">❓</div>
-                          <div className="answering-text">
-                            Answering question
+                      <div className="flex items-start gap-4 mb-4">
+                        {message.sender === 'system' ? (
+                          <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center shadow-lg">
+                            <span className="material-symbols-outlined text-sm">
+                              {message.isLoading ? 'sync' : 'info'}
+                            </span>
+                          </div>
+                        ) : message.sender === 'user' ? (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-400 to-primary-700 flex items-center justify-center shadow-lg">
+                            <span className="material-symbols-outlined text-sm">person</span>
+                          </div>
+                        ) : (
+                          <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center shadow-lg`}>
+                            <span className="material-symbols-outlined text-sm">
+                              {message.sender.includes('scientist') || message.sender === 'einstein' || message.sender === 'newton' || message.sender === 'feynman' || message.sender === 'darwin' ? 'psychology' : 
+                              message.sender.includes('philosopher') || message.sender === 'socrates' || message.sender === 'nietzsche' ? 'school' : 
+                              message.sender.includes('innovator') || message.sender === 'steve_jobs' || message.sender === 'sam_altman' ? 'lightbulb' : 
+                              message.sender.includes('expert') ? 'analytics' : 
+                              message.sender.includes('advocate') ? 'gavel' :
+                              'person'}
+                            </span>
+                          </div>
+                        )}
+                        
+                        <div>
+                          <h3 className={`font-medium ${textColor}`}>
+                            {message.sender === 'system' ? 'System' : message.sender === 'user' ? 'You' : getPersonaName(message.sender)}
+                          </h3>
+                          <div className="dark:text-gray-300 light:text-gray-700 text-sm mt-1">
+                            {message.isAnimating ? (
+                              <span className="inline-block typing-animation">
+                                {message.displayedContent !== undefined ? message.displayedContent : message.text}
+                                <span className="typing-cursor"></span>
+                              </span>
+                            ) : (
+                              <p>{message.displayedContent !== undefined ? message.displayedContent : message.text}</p>
+                            )}
+                            {message.isLoading && (
+                              <span className="inline-flex items-center gap-1">
+                                <span className="animate-pulse">.</span>
+                                <span className="animate-pulse animation-delay-200">.</span>
+                                <span className="animate-pulse animation-delay-400">.</span>
+                              </span>
+                            )}
                           </div>
                         </div>
-                      )}
-                      
-                      {message.type === 'persona' && (
-                        <div className="message-header">
-                          <div className="persona-initial">
-                            {getPersonaName(message.personaId).charAt(0)}
-                          </div>
-                          <span className="persona-name">
-                            {getPersonaName(message.personaId)}
-                          </span>
-                        </div>
-                      )}
-                      {message.type === 'system' && (
-                        <div className="message-header">
-                          <div className={`system-indicator ${message.isLoading ? 'loading-indicator' : ''}`}>
-                            {message.isLoading ? '⟳' : 'i'}
-                          </div>
-                          <span className="system-label">
-                            {message.isLoading ? 'Loading' : 'System'}
-                          </span>
-                        </div>
-                      )}
-                      <div className={`message-content ${message.isLoading ? 'loading-message' : ''}`}>
-                        {message.displayedContent !== undefined ? message.displayedContent : message.content}
-                        {message.isAnimating && <span className="cursor-blink">|</span>}
-                        {message.isLoading && <span className="loading-dots"><span></span></span>}
                       </div>
                     </div>
                   );
                 })}
                 <div ref={messagesEndRef} />
               </div>
-            </div>
-          ) : null}
+            )}
+          </div>
 
-          <div className="input-container">
-            <div className="input-options">
-              <div className="debate-toggle">
-                <label className="toggle-label">
-                  <input
-                    type="checkbox"
-                    checked={autoDebate}
-                    onChange={() => setAutoDebate(!autoDebate)}
-                    className="toggle-input"
-                  />
-                  <span className="toggle-switch"></span>
-                  <span className="toggle-text">Auto-Debate</span>
-                </label>
-              </div>
-              
-              {autoDebate && (
-                <div className="rounds-selector">
-                  <label>
-                    Rounds:
+          {/* Message input */}
+          <div className="sticky bottom-0 left-0 right-0 p-4 backdrop-blur-lg dark:bg-gray-900/80 light:bg-white/80 border-t dark:border-white/10 light:border-gray-200">
+            <div className="max-w-4xl mx-auto">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="debate-toggle">
+                  <label className="cursor-pointer flex items-center gap-2">
+                    <div className={`relative w-10 h-5 rounded-full transition-colors ${autoDebate ? 'bg-primary-600' : 'bg-gray-600'}`}>
+                      <input
+                        type="checkbox"
+                        checked={autoDebate}
+                        onChange={() => setAutoDebate(!autoDebate)}
+                        className="sr-only"
+                      />
+                      <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${autoDebate ? 'translate-x-5' : ''}`}></div>
+                    </div>
+                    <span className="text-xs dark:text-gray-300 light:text-gray-700">Auto-Debate</span>
+                  </label>
+                </div>
+                
+                {autoDebate && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs dark:text-gray-300 light:text-gray-700">Rounds:</span>
                     <select 
                       value={maxRounds} 
                       onChange={(e) => setMaxRounds(Number(e.target.value))}
-                      className="rounds-select"
+                      className="bg-transparent text-xs dark:text-gray-300 light:text-gray-700 border dark:border-gray-700 light:border-gray-300 rounded px-2 py-1"
                     >
                       <option value="1">1</option>
                       <option value="2">2</option>
@@ -968,168 +1128,236 @@ IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
                       <option value="4">4</option>
                       <option value="5">5</option>
                     </select>
-                  </label>
+                  </div>
+                )}
+              </div>
+              
+              <form className="relative" onSubmit={handleSubmit}>
+                <textarea
+                  ref={inputRef}
+                  className="w-full resize-none rounded-xl p-4 pr-16 dark:bg-white/10 light:bg-gray-100 backdrop-blur-lg dark:border dark:border-white/10 light:border light:border-gray-200 focus:dark:border-primary-500/50 focus:light:border-primary-500 focus:ring-2 focus:dark:ring-primary-500/20 focus:light:ring-primary-500/30 outline-none transition-all dark:placeholder-gray-500 light:placeholder-gray-400 dark:text-gray-200 light:text-gray-700"
+                  placeholder={selectedPersonas.length === 0 
+                    ? "Select personas to begin..." 
+                    : autoDebate 
+                      ? "Type @ to mention a specific persona..." 
+                      : "Ask a philosophical question..."}
+                  value={inputText}
+                  onChange={handleInputChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }
+                  }}
+                  disabled={isLoading || animatingText || selectedPersonas.length === 0}
+                  rows="2"
+                ></textarea>
+                <button 
+                  type="submit"
+                  disabled={isLoading || animatingText || !inputText.trim() || selectedPersonas.length === 0}
+                  className="absolute right-3 bottom-3 w-10 h-10 flex items-center justify-center rounded-lg bg-primary-600 hover:bg-primary-500 transition-colors shadow-lg dark:shadow-primary-900/30 light:shadow-primary-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? (
+                    <span className="material-symbols-outlined animate-spin">sync</span>
+                  ) : animatingText ? (
+                    <span className="material-symbols-outlined">more_horiz</span>
+                  ) : (
+                    <span className="material-symbols-outlined">send</span>
+                  )}
+                </button>
+              </form>
+              <div className="flex justify-end items-center mt-2 px-2 text-xs dark:text-gray-400 light:text-gray-500">
+                <span>Press Enter to send, Shift+Enter for new line</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Personas Bin Button - styled differently now */}
+        <button 
+          className="absolute bottom-8 right-8 w-14 h-14 rounded-full bg-white/10 backdrop-blur-lg border border-white/10 flex items-center justify-center shadow-lg hover:bg-white/20 transition-all group transform hover:scale-110 hover:rotate-3"
+          onClick={togglePersonasBin}
+          title="Select Personas"
+          aria-label="Open personas selection"
+        >
+          <span className="material-symbols-outlined text-2xl group-hover:rotate-12 transition-transform duration-300">
+            groups
+          </span>
+          {selectedPersonas.length > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary-500 text-xs flex items-center justify-center">
+              {selectedPersonas.length}
+            </span>
+          )}
+        </button>
+
+        {/* Personas Bin */}
+        {showPersonasBin && (
+          <div 
+            ref={personasBinRef}
+            className="absolute right-8 bottom-28 w-80 max-h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-gray-900/90 backdrop-blur-xl shadow-2xl z-50"
+          >
+            <div className="p-4 border-b border-white/10">
+              <h2 className="text-lg font-semibold text-white">Choose Personas</h2>
+              <p className="text-xs text-gray-400 mt-1">Select the personas you'd like to include in your discussion</p>
+            </div>
+            <div className="p-2">
+              {Object.entries(PERSONA_CATEGORIES).map(([categoryId, category]) => (
+                <div className="mb-2" key={categoryId}>
+                  <button
+                    className={`w-full p-3 flex items-center justify-between text-left rounded-lg transition-all ${expandedCategories.includes(categoryId) ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                    onClick={() => toggleCategory(categoryId)}
+                  >
+                    <span className="font-medium text-white">{category.name}</span>
+                    <span className={`material-symbols-outlined transform transition-transform ${expandedCategories.includes(categoryId) ? 'rotate-180' : ''}`}>expand_more</span>
+                  </button>
+                  <div className={`overflow-hidden transition-all duration-300 ${expandedCategories.includes(categoryId) ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                    <div className="pt-2 space-y-1">
+                      {category.personas.map(persona => (
+                        <button
+                          key={persona.id}
+                          className={`w-full p-3 flex items-center justify-between text-left rounded-lg transition-all ${selectedPersonas.includes(persona.id) ? 'bg-primary-900/40 border-l-4 border-primary-500' : 'hover:bg-white/5'}`}
+                          onClick={() => togglePersona(persona.id)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedPersonas.includes(persona.id) ? 'bg-primary-600' : 'bg-gray-700'}`}>
+                              <span className="material-symbols-outlined text-sm">
+                                {persona.id.includes('scientist') || persona.id === 'einstein' || persona.id === 'newton' || persona.id === 'feynman' || persona.id === 'darwin' ? 'psychology' : 
+                                persona.id.includes('philosopher') || persona.id === 'socrates' || persona.id === 'nietzsche' ? 'school' : 
+                                persona.id.includes('innovator') || persona.id === 'steve_jobs' || persona.id === 'sam_altman' ? 'lightbulb' : 
+                                persona.id.includes('expert') ? 'analytics' : 
+                                persona.id.includes('advocate') ? 'gavel' :
+                                'person'}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-white">{persona.name}</p>
+                              <p className="text-xs text-gray-400">{persona.description}</p>
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0">
+                            {selectedPersonas.includes(persona.id) ? (
+                              <div className="w-5 h-5 rounded-full bg-primary-500 flex items-center justify-center">
+                                <span className="material-symbols-outlined text-[14px]">check</span>
+                              </div>
+                            ) : (
+                              <div className="w-5 h-5 rounded-full border border-gray-500"></div>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
+              ))}
+            </div>
+            <div className="p-3 border-t border-white/10 bg-gray-900/80">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-300">
+                  {selectedPersonas.length} personas selected
+                </span>
+                <button 
+                  className="px-3 py-1 text-xs font-medium rounded-full bg-primary-600 text-white hover:bg-primary-500 transition-colors disabled:opacity-50"
+                  disabled={selectedPersonas.length === 0}
+                  onClick={() => setShowPersonasBin(false)}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mention Dropdown */}
+        {showMentionDropdown && (
+          <div 
+            className="absolute z-50 w-64 max-h-80 overflow-y-auto rounded-xl border border-white/10 bg-gray-900/90 backdrop-blur-xl shadow-2xl"
+            ref={mentionDropdownRef}
+            style={{
+              top: mentionPosition.top + 'px',
+              left: mentionPosition.left + 'px'
+            }}
+          >
+            <div className="p-2">
+              {getMentionSuggestions().length > 0 ? (
+                getMentionSuggestions().map(personaId => (
+                  <button 
+                    key={personaId} 
+                    className="w-full p-2 flex items-center gap-3 rounded-lg transition-all hover:bg-white/10"
+                    onClick={() => handleMentionSelect(personaId)}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-sm">
+                        {personaId.includes('scientist') || personaId === 'einstein' || personaId === 'newton' || personaId === 'feynman' || personaId === 'darwin' ? 'psychology' : 
+                        personaId.includes('philosopher') || personaId === 'socrates' || personaId === 'nietzsche' ? 'school' : 
+                        personaId.includes('innovator') || personaId === 'steve_jobs' || personaId === 'sam_altman' ? 'lightbulb' : 
+                        personaId.includes('expert') ? 'analytics' : 
+                        personaId.includes('advocate') ? 'gavel' :
+                        'person'}
+                      </span>
+                    </div>
+                    <span className="text-sm font-medium text-white">
+                      {getPersonaName(personaId)}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="p-3 text-sm text-gray-400 text-center">No matching personas</div>
               )}
             </div>
-            
-            <form className="input-form" onSubmit={handleSubmit}>
-              <textarea
-                ref={inputRef}
-                className="input-control"
-                value={inputText}
-                onChange={handleInputChange}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit(e);
-                  }
-                }}
-                placeholder={selectedPersonas.length === 0 
-                  ? "Select personas to begin..." 
-                  : autoDebate 
-                    ? "Type @ to mention a specific persona..." 
-                    : "Ask a philosophical question..."}
-                disabled={isLoading || animatingText || selectedPersonas.length === 0}
-                rows="1"
-              />
-              <button
-                type="submit"
-                className="button button-primary"
-                disabled={isLoading || animatingText || !inputText.trim() || selectedPersonas.length === 0}
+          </div>
+        )}
+
+        {/* Debug panel, if enabled */}
+        {debugMode && debugInfo && (
+          <div className="absolute bottom-20 right-20 w-96 max-h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-gray-900/90 backdrop-blur-xl shadow-2xl z-50 p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-white">Debug Information</h3>
+              <button 
+                onClick={() => setDebugInfo(null)}
+                className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
               >
-                <span className="button-text">{isLoading ? 'Thinking...' : animatingText ? 'Typing...' : 'Send'}</span>
-                <span className="button-icon">➤</span>
+                <span className="material-symbols-outlined text-sm">close</span>
               </button>
-            </form>
-          </div>
-        </main>
-      </div>
-
-      {/* Floating Button for Personas Bin */}
-      <button 
-        className={`floating-button ${hasMessages ? '' : 'prominent'}`}
-        onClick={togglePersonasBin}
-        title="Select Personas"
-        aria-label="Open personas selection"
-      >
-        <span className="floating-button-icon">
-          <svg width="14" height="24" viewBox="0 0 14 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0.999999 1L13 12L1 23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </span>
-      </button>
-
-      {/* Personas Bin */}
-      {showPersonasBin && (
-        <div 
-          ref={personasBinRef}
-          className="personas-bin"
-        >
-          <div className="categories-container">
-            {Object.entries(PERSONA_CATEGORIES).map(([categoryId, category]) => (
-              <div className="category-section" key={categoryId}>
-                <button
-                  className={`category-button ${expandedCategories.includes(categoryId) ? 'expanded' : ''}`}
-                  onClick={() => toggleCategory(categoryId)}
-                >
-                  <span className="category-name">{category.name}</span>
-                  <span className="category-arrow"></span>
-                </button>
-                <div className={`persona-list ${expandedCategories.includes(categoryId) ? 'expanded' : ''}`}>
-                  {category.personas.map(persona => (
-                    <button
-                      key={persona.id}
-                      className={`persona-button ${selectedPersonas.includes(persona.id) ? 'selected' : ''}`}
-                      onClick={() => togglePersona(persona.id)}
-                    >
-                      <div className="persona-info">
-                        <span className="persona-name">{persona.name}</span>
-                        <span className="persona-description">{persona.description}</span>
-                      </div>
-                      <div className="persona-status">
-                        {selectedPersonas.includes(persona.id) ? (
-                          <span className="check-icon">✓</span>
-                        ) : (
-                          <span className="plus-icon">+</span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div>
+                <div className="text-gray-400 mb-1">Response Status:</div>
+                <div className="text-white">{debugInfo.responseStatus}</div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Mention Dropdown */}
-      {showMentionDropdown && (
-        <div 
-          className="mention-dropdown"
-          ref={mentionDropdownRef}
-          style={{
-            top: mentionPosition.top + 'px',
-            left: mentionPosition.left + 'px'
-          }}
-        >
-          {getMentionSuggestions().length > 0 ? (
-            getMentionSuggestions().map(personaId => (
-              <div 
-                key={personaId} 
-                className="mention-item"
-                onClick={() => handleMentionSelect(personaId)}
-              >
-                <div className="mention-initial">
-                  {getPersonaName(personaId).charAt(0)}
-                </div>
-                <span className="mention-name">
-                  {getPersonaName(personaId)}
-                </span>
+              <div>
+                <div className="text-gray-400 mb-1">Response Text:</div>
+                <pre className="bg-black/20 rounded p-2 overflow-x-auto text-xs text-white">{debugInfo.responseText}</pre>
               </div>
-            ))
-          ) : (
-            <div className="mention-empty">No matching personas</div>
-          )}
-        </div>
-      )}
+              <div>
+                <div className="text-gray-400 mb-1">Parsed Data:</div>
+                <pre className="bg-black/20 rounded p-2 overflow-x-auto text-xs text-white">{JSON.stringify(debugInfo.parsedData, null, 2)}</pre>
+              </div>
+              <div>
+                <div className="text-gray-400 mb-1">Processed Response Array:</div>
+                <pre className="bg-black/20 rounded p-2 overflow-x-auto text-xs text-white">{JSON.stringify(debugInfo.responseArray, null, 2)}</pre>
+              </div>
+              <div>
+                <div className="text-gray-400 mb-1">Sanitized Array:</div>
+                <pre className="bg-black/20 rounded p-2 overflow-x-auto text-xs text-white">{JSON.stringify(debugInfo.sanitizedArray, null, 2)}</pre>
+              </div>
+              <div>
+                <div className="text-gray-400 mb-1">Persona Responses:</div>
+                <pre className="bg-black/20 rounded p-2 overflow-x-auto text-xs text-white">{JSON.stringify(debugInfo.personaResponses, null, 2)}</pre>
+              </div>
+            </div>
+          </div>
+        )}
 
-      {debugMode && debugInfo && (
-        <div className="debug-panel">
-          <h3>Debug Information</h3>
-          <div>
-            <strong>Response Status:</strong> {debugInfo.responseStatus}
-          </div>
-          <div>
-            <strong>Response Text:</strong>
-            <pre>{debugInfo.responseText}</pre>
-          </div>
-          <div>
-            <strong>Parsed Data:</strong>
-            <pre>{JSON.stringify(debugInfo.parsedData, null, 2)}</pre>
-          </div>
-          <div>
-            <strong>Processed Response Array:</strong>
-            <pre>{JSON.stringify(debugInfo.responseArray, null, 2)}</pre>
-          </div>
-          <div>
-            <strong>Sanitized Array:</strong>
-            <pre>{JSON.stringify(debugInfo.sanitizedArray, null, 2)}</pre>
-          </div>
-          <div>
-            <strong>Persona Responses:</strong>
-            <pre>{JSON.stringify(debugInfo.personaResponses, null, 2)}</pre>
-          </div>
-          <button onClick={() => setDebugInfo(null)}>Clear</button>
+        {/* Debug Mode Toggle (hidden but can be enabled with keyboard shortcut) */}
+        <div className="hidden">
+          <button onClick={toggleDebugMode}>
+            {debugMode ? 'Disable Debug' : 'Enable Debug'}
+          </button>
         </div>
-      )}
+      </main>
 
-      {/* Debug Mode Toggle (hidden but can be enabled with keyboard shortcut) */}
-      <div className="debug-toggle" style={{ display: 'none' }}>
-        <button onClick={toggleDebugMode}>
-          {debugMode ? 'Disable Debug' : 'Enable Debug'}
-        </button>
-      </div>
+      {/* If not authenticated, show login component */}
+      {!authenticated && <Login onLogin={handleLogin} />}
     </div>
   );
 }
