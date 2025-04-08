@@ -108,13 +108,37 @@ export const apiCall = async (endpoint, method = 'GET', data = null) => {
     options.body = JSON.stringify(data);
   }
   
-  // For GitHub Pages, don't use authFetch to avoid authentication issues
-  if (isGitHubPages || getCurrentUser()?.isGuest) {
-    options.headers = {
-      'Content-Type': 'application/json',
-    };
-    return fetch(url, options);
-  } else {
-    return authFetch(url, options);
+  try {
+    // For GitHub Pages, don't use authFetch to avoid authentication issues
+    if (isGitHubPages || getCurrentUser()?.isGuest) {
+      options.headers = {
+        'Content-Type': 'application/json',
+      };
+      return await fetch(url, options);
+    } else {
+      return await authFetch(url, options);
+    }
+  } catch (error) {
+    console.error(`API call error to ${url}:`, error);
+    
+    // Add more context to the error
+    if (isGitHubPages) {
+      // Special handling for GitHub Pages users
+      const newError = new Error(
+        `Failed to connect to backend at ${baseUrl}. ` +
+        'If this is the first request, the backend might be starting up (can take 30-60 seconds). ' +
+        'Please wait a moment and try again.'
+      );
+      newError.originalError = error;
+      throw newError;
+    } else {
+      // For local development
+      const newError = new Error(
+        `Failed to connect to backend at ${baseUrl}. ` +
+        'Please make sure your backend server is running.'
+      );
+      newError.originalError = error;
+      throw newError;
+    }
   }
 }; 

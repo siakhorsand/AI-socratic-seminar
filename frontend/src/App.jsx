@@ -368,7 +368,31 @@ function App() {
       console.log('Received data:', data); // Log the response data
       
       // Map responses to message objects
-      const personaResponses = data.answers.map(answer => ({
+      // Handle both authenticated API format (data.answers) and public API format (data.responses)
+      let responseArray = [];
+      
+      // For authenticated API response
+      if (data.answers) {
+        responseArray = data.answers;
+      } 
+      // For public API response
+      else if (data.responses) {
+        responseArray = data.responses;
+        
+        // If there are additional rounds, flatten them 
+        if (data.additional_rounds && data.additional_rounds.length > 0) {
+          // Flatten the additional rounds
+          const additionalResponses = data.additional_rounds.flat();
+          responseArray = [...responseArray, ...additionalResponses];
+        }
+      }
+      // Fallback if no response structure matches
+      else {
+        throw new Error("Unexpected response format from API");
+      }
+      
+      // Now use the combined responseArray
+      const personaResponses = responseArray.map(answer => ({
         type: answer.agent === 'system' ? 'system' : 'persona',
         personaId: answer.agent,
         content: answer.response,
@@ -445,11 +469,22 @@ function App() {
       setAnimatingText(false);
     } catch (error) {
       console.error('Error in handleSubmit:', error);
-      // Add error message to chat
+      // Add a more detailed error message to chat
+      let errorMessage = error.message || 'There was an error getting responses. Please try again.';
+      
+      // Check for common connection issues
+      if (error.message && error.message.includes('NetworkError') || 
+          error.message.includes('Failed to fetch') || 
+          error.message.includes('Network request failed')) {
+        errorMessage = 'Unable to connect to the backend server. This may be because the backend service is still spinning up (this can take 1-2 minutes on first load) or there is a network issue. Please wait a moment and try again.';
+      } else if (error.message && error.message.includes('Unexpected response format')) {
+        errorMessage = 'Received an unexpected response format from the server. This might be due to API changes or backend issues.';
+      }
+      
       setMessages(prev => [...prev, {
         type: 'system',
-        content: `Error: ${error.message || 'There was an error getting responses. Please try again.'}`,
-        displayedContent: `Error: ${error.message || 'There was an error getting responses. Please try again.'}`,
+        content: `Error: ${errorMessage}`,
+        displayedContent: `Error: ${errorMessage}`,
         timestamp: new Date().toISOString(),
         error: true
       }]);
