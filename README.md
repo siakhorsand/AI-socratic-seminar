@@ -1,6 +1,21 @@
 # AI Socratic Seminar
 
-An interactive platform for multi-agent discussions on complex topics.
+An interactive platform for multi-agent philosophical and intellectual discussions. The application features AI personas representing various philosophical, scientific, and strategic viewpoints that engage in Socratic dialogue.
+
+## Features
+
+- Multi-agent conversation system with categorized personas
+- Interactive UI with threaded conversations
+- Real-time response generation
+- Categories include Philosophers, Scientists, Strategists, Critics, and Innovators
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## Copyright
+
+Copyright 2025 Sia Khorsand
 
 ## Quick Start
 
