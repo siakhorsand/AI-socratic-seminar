@@ -2,7 +2,7 @@ import os
 import logging
 import json
 import time
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import random
 import asyncio
 import uuid
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(
@@ -32,21 +33,92 @@ logger.info(f"OpenAI API key loaded successfully (starts with: {api_key[:8]}...)
 # Import enhanced agent management
 from agent_manager import AgentManager
 from memory import memory_manager
+# Import auth module
+from auth import GoogleSignInRequest, TokenResponse, UserResponse, verify_google_token, create_access_token, get_current_user, TokenData
 
-app = FastAPI()
+app = FastAPI(title="AI Socratic Seminar API")
 
-# Configure CORS
+# Simple rate limiter
+class RateLimiter:
+    def __init__(self):
+        self.requests = {}
+        self.MAX_REQUESTS = 60  # Max requests per hour per IP
+        self.WINDOW = timedelta(hours=1)
+        
+    def is_rate_limited(self, ip: str) -> bool:
+        now = datetime.now()
+        if ip not in self.requests:
+            self.requests[ip] = []
+        
+        # Remove old requests
+        self.requests[ip] = [time for time in self.requests[ip] 
+                            if now - time < self.WINDOW]
+        
+        # Check rate limit
+        if len(self.requests[ip]) >= self.MAX_REQUESTS:
+            return True
+        
+        # Add new request
+        self.requests[ip].append(now)
+        return False
+
+rate_limiter = RateLimiter()
+
+# Rate limiting middleware
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    # Get client IP
+    ip = request.client.host
+    
+    # Rate limit only API endpoints
+    if "/seminar" in request.url.path:
+        if rate_limiter.is_rate_limited(ip):
+            return HTTPException(
+                status_code=429,
+                detail="Rate limit exceeded. Please try again later."
+            )
+    
+    response = await call_next(request)
+    return response
+
+# Configure CORS - add your deployed frontend URL to allow_origins when you deploy
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+deployed_url = os.getenv("DEPLOYED_URL", "")
+
+# Create a list of allowed origins
+allow_origins = [
+    "http://localhost:5173", 
+    "http://localhost:5174", 
+    "http://localhost:5175", 
+    "http://localhost:5176", 
+    "http://localhost:5177", 
+    "http://localhost:5178",
+    "http://localhost:5179", 
+    "http://localhost:5180", 
+    "http://localhost:8001", 
+    "http://localhost:8002", 
+    "http://localhost:8003"
+]
+
+# Add GitHub Pages URL to allowed origins
+github_pages_url = "https://siakhorsand.github.io"
+if github_pages_url not in allow_origins:
+    allow_origins.append(github_pages_url)
+
+# Add frontend URL and deployed URL if they are set
+if deployed_url and deployed_url not in allow_origins:
+    allow_origins.append(deployed_url)
+if frontend_url and frontend_url not in allow_origins:
+    allow_origins.append(frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", 
-                  "http://localhost:5176", "http://localhost:5177", "http://localhost:5178",
-                  "http://localhost:5179", "http://localhost:5180", "http://localhost:8001", 
-                  "http://localhost:8002", "http://localhost:8003"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-logger.info("CORS middleware configured")
+logger.info(f"CORS middleware configured with origins: {allow_origins}")
 
 # Initialize OpenAI client
 try:
@@ -113,8 +185,47 @@ AGENT_PROMPTS = load_prompts()
 # Initialize our enhanced agent manager
 agent_manager = AgentManager(client, AGENT_PROMPTS)
 
+# Authentication endpoints
+@app.post("/api/auth/google", response_model=TokenResponse)
+async def google_sign_in(request: GoogleSignInRequest):
+    """Authenticate user with Google Sign-In"""
+    try:
+        # Verify the Google ID token
+        user_info = await verify_google_token(request.idToken)
+        
+        # Create JWT access token
+        token = create_access_token(user_info)
+        
+        # Return the token and user info
+        return TokenResponse(
+            token=token,
+            user=UserResponse(
+                id=user_info["id"],
+                email=user_info["email"],
+                name=user_info["name"],
+                picture=user_info.get("picture")
+            )
+        )
+    except Exception as e:
+        logger.error(f"Error in Google Sign-In: {str(e)}")
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication failed"
+        )
+
+@app.get("/api/user/me", response_model=UserResponse)
+async def get_user(current_user: TokenData = Depends(get_current_user)):
+    """Get the current authenticated user"""
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        name=current_user.name,
+        picture=current_user.picture
+    )
+
+# Seminar endpoints - require authentication
 @app.post("/seminar")
-async def create_seminar(request: SeminarRequest):
+async def create_seminar(request: SeminarRequest, current_user: TokenData = Depends(get_current_user)):
     try:
         logger.info(f"Processing seminar request with input: {request.question[:50]}...")
         
@@ -256,12 +367,12 @@ async def create_seminar(request: SeminarRequest):
         
         if all_responses:
             logger.info(f"Successfully generated {len(all_responses)} responses")
-            return {"answers": all_responses, "conversation_id": conversation_id}
+            return {"conversation_id": conversation_id, "answers": all_responses}
         else:
             raise HTTPException(status_code=500, detail="Failed to get any valid responses")
             
     except Exception as e:
-        logger.error(f"Error in seminar: {str(e)}")
+        logger.error(f"Error in create_seminar: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Helper function to build conversation context for an agent
@@ -395,6 +506,173 @@ async def delete_conversation(conversation_id: str):
     except Exception as e:
         logger.error(f"Error deleting conversation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Anonymous seminar endpoint (no authentication required)
+@app.post("/public/seminar")
+async def create_public_seminar(request: SeminarRequest):
+    try:
+        logger.info(f"Processing public seminar request with input: {request.question[:50]}...")
+        
+        # Use conversation ID if provided, otherwise generate a new one
+        conversation_id = request.conversation_id or str(uuid.uuid4())
+        logger.info(f"Using conversation ID: {conversation_id}")
+        
+        # Initial user message
+        conversation_context = [{"role": "user", "content": request.question, "agent": "user"}]
+        
+        # If a specific agent is mentioned, prioritize getting their response first
+        agent_ids = request.agent_ids.copy()
+        if request.direct_mention and request.direct_mention in agent_ids:
+            # Move the mentioned agent to the beginning of the list
+            agent_ids.remove(request.direct_mention)
+            agent_ids.insert(0, request.direct_mention)
+            logger.info(f"Direct mention detected for agent: {request.direct_mention}")
+        
+        # Get first round of responses from all agents
+        initial_responses = await agent_manager.get_multiple_responses(
+            agent_ids, 
+            request.question, 
+            conversation_id
+        )
+        
+        for resp in initial_responses:
+            conversation_context.append({
+                "role": "assistant", 
+                "content": resp["response"], 
+                "agent": resp["agent"]
+            })
+        
+        # If auto conversation is enabled, simulate an agent discussion
+        additional_rounds = []
+        if request.auto_conversation and len(agent_ids) > 1:
+            max_rounds = min(request.max_rounds, 5)  # Cap at 5 to prevent abuse
+            logger.info(f"Auto conversation enabled, generating {max_rounds} rounds")
+            
+            current_round = 0
+            while current_round < max_rounds:
+                current_round += 1
+                logger.info(f"Generating round {current_round} of auto conversation")
+                
+                round_responses = []
+                for i, agent_id in enumerate(agent_ids):
+                    # Prepare context from previous messages
+                    agent_context = "\n\n".join([
+                        f"{ctx['agent']}: {ctx['content']}" 
+                        for ctx in conversation_context
+                    ])
+                    
+                    # Formulate a question based on the context
+                    meta_prompt = f"""
+                    Based on this ongoing conversation, what would be an interesting and relevant point for you 
+                    to add as {agent_id}? It should be in response to what others have said.
+                    
+                    Conversation so far:
+                    {agent_context}
+                    """
+                    
+                    # Get the response from the agent
+                    response = await agent_manager.get_response(
+                        agent_id,
+                        meta_prompt,
+                        conversation_id,
+                        include_context=False  # We're providing our own context
+                    )
+                    
+                    round_responses.append(response)
+                    
+                    # Add to the overall conversation context
+                    conversation_context.append({
+                        "role": "assistant",
+                        "content": response["response"],
+                        "agent": response["agent"]
+                    })
+                
+                additional_rounds.append(round_responses)
+                
+                # Small delay to prevent rate limiting
+                await asyncio.sleep(0.5)
+        
+        return {
+            "question": request.question,
+            "conversation_id": conversation_id,
+            "responses": initial_responses,
+            "additional_rounds": additional_rounds
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in public seminar request: {str(e)}")
+        logger.error(f"Full error details: {repr(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing request: {str(e)}"
+        )
+
+# Anonymous continue conversation endpoint
+@app.post("/public/continue")
+async def continue_public_conversation(request: ContinueRequest):
+    try:
+        logger.info(f"Continuing public conversation {request.conversation_id}")
+        
+        # Get responses from all agents
+        if request.question:
+            # If a new question is provided
+            responses = await agent_manager.get_multiple_responses(
+                request.agent_ids,
+                request.question,
+                request.conversation_id
+            )
+        else:
+            # If no new question, use the last exchange
+            conversation = memory_manager.get_conversation(request.conversation_id)
+            if not conversation:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Conversation not found"
+                )
+            
+            # Get the last user message
+            last_user_message = None
+            for exchange in reversed(conversation):
+                if exchange.get("role") == "user":
+                    last_user_message = exchange.get("content")
+                    break
+            
+            if not last_user_message:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No previous user message found"
+                )
+            
+            responses = await agent_manager.get_multiple_responses(
+                request.agent_ids,
+                last_user_message,
+                request.conversation_id
+            )
+        
+        return {
+            "conversation_id": request.conversation_id,
+            "responses": responses
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in continue public conversation: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing request: {str(e)}"
+        )
+
+# Anonymous available agents endpoint
+@app.get("/public/agents")
+async def get_public_available_agents():
+    try:
+        agents = agent_manager.get_available_agents()
+        return {"agents": agents}
+    except Exception as e:
+        logger.error(f"Error getting available agents: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting available agents: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn

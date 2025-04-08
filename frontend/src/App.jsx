@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
+import Login from './components/Login';
+import { isAuthenticated, getCurrentUser, logout, apiCall } from './utils/auth';
 
 // Organized personas by categories
 const PERSONA_CATEGORIES = {
@@ -97,9 +99,46 @@ function App() {
   const [directMentionTo, setDirectMentionTo] = useState(null);
   const inputRef = useRef(null);
   const mentionDropdownRef = useRef(null);
-  const [apiKey, setApiKey] = useState('');
-  const [showApiInput, setShowApiInput] = useState(true);
   const [conversationId, setConversationId] = useState('');
+  const [authenticated, setAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+
+  // Initialize conversation ID and check authentication status
+  useEffect(() => {
+    if (!conversationId) {
+      setConversationId(generateUUID());
+    }
+    
+    // Check if user is logged in
+    const authStatus = isAuthenticated();
+    setAuthenticated(authStatus);
+    
+    if (authStatus) {
+      setUser(getCurrentUser());
+    }
+  }, [conversationId]);
+
+  // Generate a random UUID for conversation ID
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
+  // Handle login success
+  const handleLogin = (userData) => {
+    setAuthenticated(true);
+    setUser(userData);
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    logout();
+    setAuthenticated(false);
+    setUser(null);
+    setMessages([]);
+  };
 
   const toggleCategory = (categoryId) => {
     if (expandedCategories.includes(categoryId)) {
@@ -278,24 +317,9 @@ function App() {
     };
   }, []);
 
-  // Initialize conversation ID if needed
-  useEffect(() => {
-    if (!conversationId) {
-      setConversationId(generateUUID());
-    }
-  }, [conversationId]);
-
-  // Generate a random UUID for conversation ID
-  const generateUUID = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!inputText.trim() || selectedPersonas.length === 0 || isLoading || animatingText || !apiKey) return;
+    if (!inputText.trim() || selectedPersonas.length === 0 || isLoading || animatingText) return;
 
     setIsLoading(true);
     
@@ -304,7 +328,8 @@ function App() {
       const userMessage = { 
         type: 'user', 
         content: inputText,
-        conversationId: conversationId 
+        conversationId: conversationId,
+        timestamp: new Date().toISOString(),
       };
       setMessages(prev => [...prev, userMessage]);
       
@@ -320,68 +345,38 @@ function App() {
         agentsToUse = [directMentionTo, ...selectedPersonas.filter(id => id !== directMentionTo)];
       }
 
-      // Collect all previous messages for context
-      const contextMessages = messages.map(msg => {
-        if (msg.type === 'user') {
-          return { role: 'user', content: msg.content };
-        } else if (msg.type === 'persona') {
-          return { role: 'assistant', content: `${getPersonaName(msg.personaId)}: ${msg.content}` };
-        } else {
-          return { role: 'system', content: msg.content };
-        }
+      // Get responses from the backend
+      const response = await apiCall('/seminar', 'POST', {
+        question: inputText,
+        agent_ids: agentsToUse,
+        conversation_id: conversationId,
+        auto_conversation: autoDebate,
+        max_rounds: maxRounds,
+        direct_mention: directMentionTo // Pass direct mention to backend
       });
-
-      // Array to store all persona responses
-      const personaResponses = [];
-
-      // Get responses from each selected persona
-      for (const personaId of agentsToUse) {
-        const prompt = AGENT_PROMPTS[personaId] || `You are ${getPersonaName(personaId)}, responding to a question in a multi-agent conversation.`;
-        
-        // Create the message array with system prompt + context + user query
-        const messages = [
-          { role: 'system', content: prompt },
-          ...contextMessages,
-          { role: 'user', content: inputText }
-        ];
-
-        // Call OpenAI API directly
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: 'gpt-3.5-turbo',
-            messages: messages,
-            temperature: 0.7,
-            max_tokens: 500
-          })
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`OpenAI API error: ${response.status}, ${errorText}`);
-          throw new Error(`OpenAI API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        // Add to personaResponses
-        personaResponses.push({
-          type: 'persona',
-          personaId: personaId,
-          content: data.choices[0].message.content,
-          timestamp: new Date().toISOString(),
-          conversationId: conversationId,
-          displayedContent: '', // Initialize with empty string for animation
-          fullContent: data.choices[0].message.content // Store the full content
-        });
-      }
 
       // Reset direct mention after submission
       setDirectMentionTo(null);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Received data:', data); // Log the response data
+      
+      // Map responses to message objects
+      const personaResponses = data.answers.map(answer => ({
+        type: answer.agent === 'system' ? 'system' : 'persona',
+        personaId: answer.agent,
+        content: answer.response,
+        timestamp: new Date().toISOString(),
+        conversationId: data.conversation_id,
+        displayedContent: '', // Initialize with empty string for animation
+        fullContent: answer.response // Store the full content
+      }));
       
       // Add responses one by one with animation
       setAnimatingText(true);
@@ -447,19 +442,14 @@ function App() {
         }
       }
       
-      // If auto-debate is enabled and we have multiple personas, generate some additional conversation
-      if (autoDebate && selectedPersonas.length > 1 && maxRounds > 0) {
-        await generateAutoDebate(updatedMessages, maxRounds);
-      }
-      
       setAnimatingText(false);
     } catch (error) {
       console.error('Error in handleSubmit:', error);
       // Add error message to chat
       setMessages(prev => [...prev, {
         type: 'system',
-        content: `Error: ${error.message || 'There was an error getting responses. Please check your API key and try again.'}`,
-        displayedContent: `Error: ${error.message || 'There was an error getting responses. Please check your API key and try again.'}`,
+        content: `Error: ${error.message || 'There was an error getting responses. Please try again.'}`,
+        displayedContent: `Error: ${error.message || 'There was an error getting responses. Please try again.'}`,
         timestamp: new Date().toISOString(),
         error: true
       }]);
@@ -467,130 +457,6 @@ function App() {
     } finally {
       setIsLoading(false);
       scrollToBottom(); // Ensure we're scrolled to bottom after everything
-    }
-  };
-
-  // Function to generate auto-debate responses
-  const generateAutoDebate = async (currentMessages, rounds) => {
-    if (rounds <= 0 || selectedPersonas.length < 2) return;
-    
-    try {
-      for (let round = 0; round < rounds; round++) {
-        // Select 2-3 random personas for this round
-        const numAgents = Math.min(Math.floor(Math.random() * 2) + 2, selectedPersonas.length);
-        const roundAgents = [...selectedPersonas].sort(() => 0.5 - Math.random()).slice(0, numAgents);
-        
-        // Get responses for each agent
-        for (const personaId of roundAgents) {
-          // Build context from all previous messages
-          const contextMessages = currentMessages.map(msg => {
-            if (msg.type === 'user') {
-              return { role: 'user', content: msg.content };
-            } else if (msg.type === 'persona') {
-              return { role: 'assistant', content: `${getPersonaName(msg.personaId)}: ${msg.content || msg.displayedContent}` };
-            } else {
-              return { role: 'system', content: msg.content || msg.displayedContent };
-            }
-          });
-          
-          // Create instruction for the agent to respond to the conversation
-          const otherAgentNames = selectedPersonas
-            .filter(id => id !== personaId)
-            .map(id => getPersonaName(id))
-            .join(', ');
-          
-          const prompt = AGENT_PROMPTS[personaId] || `You are ${getPersonaName(personaId)}, responding to a question in a multi-agent conversation.`;
-          const continuationPrompt = `You are ${getPersonaName(personaId)} in a group chat. Please respond to the ongoing discussion ONLY IF you have a valuable perspective or can challenge an idea constructively. You may directly address any of these participants by name in your response: ${otherAgentNames}. Be selective about which points you address - you don't need to respond to everything. Keep your response brief and focused on making a single strong point.`;
-          
-          // Call OpenAI API for this agent
-          const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-              model: 'gpt-3.5-turbo',
-              messages: [
-                { role: 'system', content: prompt },
-                ...contextMessages,
-                { role: 'user', content: continuationPrompt }
-              ],
-              temperature: 0.7,
-              max_tokens: 300
-            })
-          });
-          
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`OpenAI API error in auto-debate: ${response.status}, ${errorText}`);
-            continue; // Skip this agent and try the next one
-          }
-          
-          const data = await response.json();
-          const agentResponse = data.choices[0].message.content;
-          
-          // Determine if this message is replying to another agent
-          const replyToMessage = detectReplyTarget(agentResponse, personaId, currentMessages);
-          
-          // Add this response to messages with animation
-          const newMessage = {
-            type: 'persona',
-            personaId: personaId,
-            fullContent: agentResponse,
-            displayedContent: '',
-            isAnimating: true,
-            timestamp: new Date().toISOString(),
-            conversationId: conversationId,
-            replyTo: replyToMessage
-          };
-          
-          currentMessages.push(newMessage);
-          setMessages([...currentMessages]);
-          scrollToBottom();
-          
-          // Animate the text
-          let displayedText = '';
-          for (let j = 0; j < agentResponse.length; j++) {
-            displayedText += agentResponse[j];
-            currentMessages[currentMessages.length - 1].displayedContent = displayedText;
-            setMessages([...currentMessages]);
-            if (j % 20 === 0) scrollToBottom();
-            await new Promise(resolve => setTimeout(resolve, 20));
-          }
-          
-          // Mark animation as complete
-          currentMessages[currentMessages.length - 1].isAnimating = false;
-          setMessages([...currentMessages]);
-          scrollToBottom();
-          
-          // Add delay between responses
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-      
-      // Add a final message
-      currentMessages.push({
-        type: 'system',
-        content: 'The discussion has concluded. You may now respond or ask a follow-up question.',
-        displayedContent: 'The discussion has concluded. You may now respond or ask a follow-up question.',
-        timestamp: new Date().toISOString(),
-        conversationId: conversationId
-      });
-      
-      setMessages([...currentMessages]);
-      scrollToBottom();
-      
-    } catch (error) {
-      console.error('Error in auto-debate:', error);
-      // Add error message
-      setMessages(prev => [...prev, {
-        type: 'system',
-        content: 'Error generating auto-debate responses. The conversation has been cut short.',
-        displayedContent: 'Error generating auto-debate responses. The conversation has been cut short.',
-        timestamp: new Date().toISOString(),
-        error: true
-      }]);
     }
   };
 
@@ -616,41 +482,29 @@ function App() {
     );
   };
 
+  // If not authenticated, show the Login component
+  if (!authenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
     <div className="app-container">
       <div className="glass-panel">
         <header className="app-header">
-          <h1>AI Socratic Seminar</h1>
-          {showApiInput && (
-            <div className="api-key-container">
-              <input
-                type="password"
-                placeholder="Enter your OpenAI API Key"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="api-key-input"
-              />
-              {apiKey && (
-                <button 
-                  className="api-key-confirm"
-                  onClick={() => setShowApiInput(false)}
-                >
-                  Confirm
-                </button>
+          <div className="header-top">
+            <h1>AI Socratic Seminar</h1>
+            <div className="user-info">
+              {user && (
+                <>
+                  {user.picture && <img src={user.picture} alt={user.name} className="user-avatar" />}
+                  <span className="user-name">{user.name}</span>
+                  <button className="logout-button" onClick={handleLogout}>
+                    Sign Out
+                  </button>
+                </>
               )}
-              <p className="api-key-info">
-                Your API key stays in your browser and is not stored on any server.
-              </p>
             </div>
-          )}
-          {!showApiInput && (
-            <button 
-              className="change-api-key"
-              onClick={() => setShowApiInput(true)}
-            >
-              Change API Key
-            </button>
-          )}
+          </div>
           <div className="selected-personas">
             {selectedPersonas.map(personaId => (
               <div key={personaId} className="selected-persona">
