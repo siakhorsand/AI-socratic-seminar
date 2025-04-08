@@ -18,7 +18,7 @@ A simplified version of the AI Socratic Seminar is now available on GitHub Pages
 - Includes all the same personas and conversation features
 - Works on any device with a modern web browser
 
-**[Access the GitHub Pages version here](https://siakhorsand.github.io/ai-socratic-seminar/)**
+**[Access the GitHub Pages version here](https://siakhorsand.github.io/AI-socratic-seminar/)**
 
 ### Using the GitHub Pages Version
 
