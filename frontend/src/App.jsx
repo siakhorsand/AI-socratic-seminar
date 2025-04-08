@@ -118,6 +118,9 @@ function App() {
   const [user, setUser] = useState(null);
   const [debugMode, setDebugMode] = useState(false);
   const [debugInfo, setDebugInfo] = useState(null);
+  const [hasMessages, setHasMessages] = useState(false);
+  const personasBinRef = useRef(null);
+  const [agentQuestionTarget, setAgentQuestionTarget] = useState(null);
 
   // Initialize conversation ID and check authentication status
   useEffect(() => {
@@ -193,103 +196,79 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Function to detect which agent a message is replying to
-  const detectReplyTarget = (content, personaId, allMessages) => {
-    if (!content || allMessages.length < 2) return null;
+  // Enhanced function to detect if a message contains a question directed at another agent
+  const detectQuestionTarget = (content, allAgents) => {
+    if (!content) return null;
     
-    // Get previous agent messages
-    const previousAgentMessages = allMessages
-      .filter(m => m.type === 'persona' && m.personaId !== personaId)
-      .map(m => ({
-        personaId: m.personaId,
-        name: getPersonaName(m.personaId),
-        nameLower: getPersonaName(m.personaId).toLowerCase(),
-        message: m,
-        index: allMessages.indexOf(m)
-      }));
+    // Check for question patterns directed at specific agents
+    const sentences = content.split(/[.!?]\s+/);
     
-    // Skip if no previous messages to respond to
-    if (previousAgentMessages.length === 0) return null;
+    // Look at the last 1-2 sentences for questions
+    const lastSentences = sentences.slice(-2).join('. ');
     
-    // Check for direct references to another agent in the first two sentences
-    const firstTwoSentences = content.split(/[.!?]\s+/).slice(0, 2).join(". ") + ".";
-    
-    // Check for explicit reply patterns like "Replying to X" or "In response to X"
-    const replyPatterns = [
-      /replying\s+to\s+(\w+)/i,
-      /in\s+response\s+to\s+(\w+)/i,
-      /addressing\s+(\w+)/i,
-      /to\s+answer\s+(\w+)/i,
-    ];
-    
-    for (const pattern of replyPatterns) {
-      const match = firstTwoSentences.match(pattern);
-      if (match && match[1]) {
-        const mentionedName = match[1].toLowerCase();
-        // Find agent that matches this mention
-        const matchedAgent = previousAgentMessages.find(agent => 
-          agent.nameLower.toLowerCase().includes(mentionedName) || 
-          agent.personaId.toLowerCase().includes(mentionedName)
-        );
-        if (matchedAgent) return matchedAgent.index;
+    // Check if the last part contains a question mark
+    if (lastSentences.includes('?')) {
+      // Check for agent names in the question
+      for (const agentId of allAgents) {
+        const agentName = getPersonaName(agentId);
+        const readableId = agentId.replace(/_/g, ' ');
+        
+        // Look for the agent name followed by a question mark somewhere after
+        if ((lastSentences.toLowerCase().includes(agentName.toLowerCase()) || 
+             lastSentences.toLowerCase().includes(readableId.toLowerCase())) && 
+            lastSentences.indexOf('?') > lastSentences.toLowerCase().indexOf(agentName.toLowerCase())) {
+          return agentId;
+        }
       }
-    }
-    
-    for (const prevAgent of previousAgentMessages.reverse()) { // Check most recent first
-      // Check for direct name mentions
-      if (
-        firstTwoSentences.includes(prevAgent.name) || 
-        firstTwoSentences.toLowerCase().includes(prevAgent.nameLower)
-      ) {
-        return prevAgent.index;
-      }
-      
-      // Check for ID mentions (like "Socrates" for "socrates")
-      const readableId = prevAgent.personaId.replace(/_/g, ' ');
-      if (
-        firstTwoSentences.includes(readableId) || 
-        firstTwoSentences.toLowerCase().includes(readableId.toLowerCase())
-      ) {
-        return prevAgent.index;
-      }
-    }
-    
-    // If we've gone through multiple rounds and this is the first message in a new round,
-    // assume it's replying to the last message from the previous round
-    if (autoDebate && previousAgentMessages.length > 0) {
-      return previousAgentMessages[0].index; // Most recent previous agent message
     }
     
     return null;
   };
 
-  // Handle @ mentions
+  // Updated handleInputChange function to properly handle @ mentions
   const handleInputChange = (e) => {
     const value = e.target.value;
     setInputText(value);
     
     // Check for @ mentions
     const lastAtSymbolIndex = value.lastIndexOf('@');
-    if (lastAtSymbolIndex !== -1 && (lastAtSymbolIndex === 0 || value[lastAtSymbolIndex - 1] === ' ')) {
+    
+    // Only process mention if we have text after the @ symbol
+    if (lastAtSymbolIndex !== -1 && 
+        (lastAtSymbolIndex === 0 || value[lastAtSymbolIndex - 1] === ' ') &&
+        lastAtSymbolIndex !== value.length - 1) {
+      
       const cursorPosition = e.target.selectionStart;
+      
+      // Only process if cursor is after the @ symbol
       if (cursorPosition > lastAtSymbolIndex) {
-        const searchText = value.substring(lastAtSymbolIndex + 1, cursorPosition);
-        setMentionSearch(searchText);
+        // Find the end of the current word (space or end of string)
+        const textAfterAt = value.substring(lastAtSymbolIndex + 1);
+        const nextSpaceIndex = textAfterAt.indexOf(' ');
+        const searchEnd = nextSpaceIndex !== -1 ? nextSpaceIndex : textAfterAt.length;
         
-        // Calculate position for dropdown
-        const inputRect = inputRef.current.getBoundingClientRect();
-        const textWidth = getTextWidth(value.substring(0, lastAtSymbolIndex), getComputedStyle(inputRef.current).font);
-        
-        setMentionPosition({
-          top: inputRect.top - 5,
-          left: inputRect.left + textWidth + 5
-        });
-        
-        setShowMentionDropdown(true);
+        // Check if we're in the middle of typing a mention
+        if (nextSpaceIndex === -1 || cursorPosition <= lastAtSymbolIndex + 1 + searchEnd) {
+          const searchText = value.substring(lastAtSymbolIndex + 1, lastAtSymbolIndex + 1 + searchEnd);
+          setMentionSearch(searchText);
+          
+          // Calculate position for dropdown
+          const inputRect = inputRef.current.getBoundingClientRect();
+          const textWidth = getTextWidth(value.substring(0, lastAtSymbolIndex), getComputedStyle(inputRef.current).font);
+          
+          setMentionPosition({
+            top: inputRect.top - 5,
+            left: inputRect.left + textWidth + 5
+          });
+          
+          setShowMentionDropdown(true);
+          return;
+        }
       }
-    } else {
-      setShowMentionDropdown(false);
     }
+    
+    // If we reach here, we're not processing a mention
+    setShowMentionDropdown(false);
   };
   
   // Helper to calculate text width
@@ -300,13 +279,24 @@ function App() {
     return context.measureText(text).width;
   };
   
-  // Handle selecting a persona from mention dropdown
+  // Updated selectMention function to properly handle the selection
   const selectMention = (personaId) => {
     const lastAtSymbolIndex = inputText.lastIndexOf('@');
+    if (lastAtSymbolIndex === -1) return;
+    
+    // Find if there's a space after the @ symbol
+    const textAfterAt = inputText.substring(lastAtSymbolIndex + 1);
+    const nextSpaceIndex = textAfterAt.indexOf(' ');
+    
+    // Extract text before and after the mention
     const beforeMention = inputText.substring(0, lastAtSymbolIndex);
-    const afterMention = inputText.substring(inputRef.current.selectionStart);
+    const afterMention = nextSpaceIndex !== -1 
+      ? inputText.substring(lastAtSymbolIndex + 1 + nextSpaceIndex)
+      : '';
+    
     const personaName = getPersonaName(personaId);
     
+    // Set the new text with the completed mention
     setInputText(`${beforeMention}@${personaName} ${afterMention}`);
     setShowMentionDropdown(false);
     setDirectMentionTo(personaId);
@@ -333,9 +323,28 @@ function App() {
     };
   }, []);
 
+  // Update the message formatting for mentions to have better tag-based reply hierarchy
+  const formatMentionedMessage = (agentId, question, priorityAgent, otherAgents) => {
+    const isMentioned = agentId === priorityAgent;
+    const otherAgentNames = otherAgents.map(id => getPersonaName(id)).join(', ');
+    
+    if (isMentioned) {
+      // This is the directly mentioned agent - they should respond fully
+      return `${question}\n\n[You've been directly mentioned/asked. Provide a full response in 2-4 sentences.]`;
+    } else {
+      // Other agents should only respond if they disagree or have something valuable to add
+      return `${question}\n\n[${getPersonaName(priorityAgent)} has been directly addressed in this message. Only respond if you strongly disagree or have an essential insight to add. If you simply agree, just say "I agree with ${getPersonaName(priorityAgent)}" in your own voice/style. Keep your response to 1-2 sentences maximum.]`;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!inputText.trim() || selectedPersonas.length === 0 || isLoading || animatingText) return;
+
+    // Set hasMessages to true when first message is sent
+    if (!hasMessages) {
+      setHasMessages(true);
+    }
 
     setIsLoading(true);
     
@@ -362,18 +371,40 @@ function App() {
       // Clear input immediately after submitting
       setInputText('');
 
-      // Determine which agents should respond based on direct mention
+      // Determine which agents should respond based on direct mention or previous question
       let agentsToUse = selectedPersonas;
+      let priorityAgent = null;
       
-      // If there's a direct mention, prioritize that agent first
+      // Check if there's a direct mention from the user
       if (directMentionTo && selectedPersonas.includes(directMentionTo)) {
-        // Move the mentioned agent to the front of the array
-        agentsToUse = [directMentionTo, ...selectedPersonas.filter(id => id !== directMentionTo)];
+        priorityAgent = directMentionTo;
+      }
+      // Or if there was a question directed at a specific agent in the last message
+      else if (agentQuestionTarget && selectedPersonas.includes(agentQuestionTarget)) {
+        priorityAgent = agentQuestionTarget;
+        setAgentQuestionTarget(null); // Reset after using
+      }
+      
+      // If we have a priority agent, reorganize the agents list
+      if (priorityAgent) {
+        // Move the priority agent to the front of the array
+        agentsToUse = [priorityAgent, ...selectedPersonas.filter(id => id !== priorityAgent)];
       }
 
-      // Get responses from the backend
+      // Get responses from the backend with instructions for brevity and tag-based hierarchy
+      let enhancedQuestion = inputText;
+
+      // Check if we have a priority agent (either from direct mention or question)
+      if (priorityAgent) {
+        const nonPriorityAgents = selectedPersonas.filter(id => id !== priorityAgent);
+        enhancedQuestion = formatMentionedMessage(priorityAgent, inputText, priorityAgent, nonPriorityAgents);
+      } else {
+        // No specific agent is targeted, just keep responses brief
+        enhancedQuestion += "\n\n[Please keep your response brief and to the point, no more than 2-4 sentences]";
+      }
+
       const response = await apiCall('/seminar', 'POST', {
-        question: inputText,
+        question: enhancedQuestion,
         agent_ids: agentsToUse,
         conversation_id: conversationId,
         auto_conversation: autoDebate,
@@ -531,8 +562,11 @@ function App() {
       // Add responses one by one with animation
       setAnimatingText(true);
       
-      let updatedMessages = [...messages, userMessage];
-      
+      let updatedMessages = messages.filter(msg => !msg.isLoading);
+      if (!updatedMessages.includes(userMessage)) {
+        updatedMessages.push(userMessage);
+      }
+
       for (let i = 0; i < personaResponses.length; i++) {
         const response = personaResponses[i];
         
@@ -541,12 +575,16 @@ function App() {
           ? detectReplyTarget(response.fullContent, response.personaId, updatedMessages)
           : null;
         
+        // Check if this is a response to a direct question
+        const isAnsweringQuestion = agentQuestionTarget === response.personaId;
+        
         // Add initial response with empty content
         const newMessage = {
           ...response,
           displayedContent: '',
           isAnimating: true,
-          replyTo: replyToMessage
+          replyTo: replyToMessage,
+          isAnsweringQuestion: isAnsweringQuestion
         };
         
         updatedMessages.push(newMessage);
@@ -569,7 +607,12 @@ function App() {
           setMessages([...updatedMessages]);
           
           // Only scroll periodically during animation to avoid jerky scrolling
-          if (j % 20 === 0) scrollToBottom();
+          if (j % 20 === 0) {
+            // Use requestAnimationFrame to ensure smooth scrolling during animation
+            requestAnimationFrame(() => {
+              scrollToBottom();
+            });
+          }
           
           // Delay between each character (faster for system messages)
           await new Promise(resolve => setTimeout(resolve, 
@@ -593,6 +636,16 @@ function App() {
       }
       
       setAnimatingText(false);
+
+      // After processing all responses, check the last one for a question
+      const lastPersonaResponse = personaResponses[personaResponses.length - 1];
+      if (lastPersonaResponse && lastPersonaResponse.type === 'persona') {
+        const targetAgentId = detectQuestionTarget(lastPersonaResponse.content, selectedPersonas);
+        if (targetAgentId && targetAgentId !== lastPersonaResponse.personaId) {
+          setAgentQuestionTarget(targetAgentId);
+          console.log(`Detected question from ${lastPersonaResponse.personaId} to ${targetAgentId}`);
+        }
+      }
     } catch (error) {
       console.error('Error in handleSubmit:', error);
       // Add a more detailed error message to chat
@@ -693,6 +746,93 @@ function App() {
     };
   }, [debugMode]);
 
+  // Add event listener to detect clicks outside the personas bin
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showPersonasBin && 
+          personasBinRef.current && 
+          !personasBinRef.current.contains(event.target) &&
+          !event.target.closest('.floating-button')) {
+        setShowPersonasBin(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showPersonasBin]);
+
+  // Function to detect which agent a message is replying to
+  const detectReplyTarget = (content, personaId, allMessages) => {
+    if (!content || allMessages.length < 2) return null;
+    
+    // Get previous agent messages
+    const previousAgentMessages = allMessages
+      .filter(m => m.type === 'persona' && m.personaId !== personaId)
+      .map(m => ({
+        personaId: m.personaId,
+        name: getPersonaName(m.personaId),
+        nameLower: getPersonaName(m.personaId).toLowerCase(),
+        message: m,
+        index: allMessages.indexOf(m)
+      }));
+    
+    // Skip if no previous messages to respond to
+    if (previousAgentMessages.length === 0) return null;
+    
+    // Check for direct references to another agent in the first two sentences
+    const firstTwoSentences = content.split(/[.!?]\s+/).slice(0, 2).join(". ") + ".";
+    
+    // Check for explicit reply patterns like "Replying to X" or "In response to X"
+    const replyPatterns = [
+      /replying\s+to\s+(\w+)/i,
+      /in\s+response\s+to\s+(\w+)/i,
+      /addressing\s+(\w+)/i,
+      /to\s+answer\s+(\w+)/i,
+    ];
+    
+    for (const pattern of replyPatterns) {
+      const match = firstTwoSentences.match(pattern);
+      if (match && match[1]) {
+        const mentionedName = match[1].toLowerCase();
+        // Find agent that matches this mention
+        const matchedAgent = previousAgentMessages.find(agent => 
+          agent.nameLower.toLowerCase().includes(mentionedName) || 
+          agent.personaId.toLowerCase().includes(mentionedName)
+        );
+        if (matchedAgent) return matchedAgent.index;
+      }
+    }
+    
+    for (const prevAgent of previousAgentMessages.reverse()) { // Check most recent first
+      // Check for direct name mentions
+      if (
+        firstTwoSentences.includes(prevAgent.name) || 
+        firstTwoSentences.toLowerCase().includes(prevAgent.nameLower)
+      ) {
+        return prevAgent.index;
+      }
+      
+      // Check for ID mentions (like "Socrates" for "socrates")
+      const readableId = prevAgent.personaId.replace(/_/g, ' ');
+      if (
+        firstTwoSentences.includes(readableId) || 
+        firstTwoSentences.toLowerCase().includes(readableId.toLowerCase())
+      ) {
+        return prevAgent.index;
+      }
+    }
+    
+    // If we've gone through multiple rounds and this is the first message in a new round,
+    // assume it's replying to the last message from the previous round
+    if (autoDebate && previousAgentMessages.length > 0) {
+      return previousAgentMessages[0].index; // Most recent previous agent message
+    }
+    
+    return null;
+  };
+
   // If not authenticated, show the Login component
   if (!authenticated) {
     return <Login onLogin={handleLogin} />;
@@ -735,7 +875,7 @@ function App() {
           </div>
         </header>
 
-        <main className="chat-container">
+        <main className={`chat-container ${hasMessages ? 'has-messages' : 'no-messages'}`}>
           <div className="messages-container">
             {messages.length === 0 ? (
               <div className="welcome-message">
@@ -763,7 +903,8 @@ function App() {
                             ? 'system-message' 
                             : 'persona-message'
                       } ${message.replyTo !== undefined && message.replyTo !== null ? 'reply-message' : ''}
-                      ${isRepliedTo ? 'is-replied-to' : ''}`}
+                      ${isRepliedTo ? 'is-replied-to' : ''}
+                      ${message.isAnsweringQuestion ? 'answering-question' : ''}`}
                     >
                       {message.replyTo !== undefined && message.replyTo !== null && (
                         <div className="reply-indicator">
@@ -771,6 +912,15 @@ function App() {
                           <div className="reply-to">
                             <span className="reply-icon">↩</span>
                             Replying to {getPersonaName(messages[message.replyTo].personaId)}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {message.isAnsweringQuestion && (
+                        <div className="question-response-indicator">
+                          <div className="question-icon">❓</div>
+                          <div className="answering-text">
+                            Answering question
                           </div>
                         </div>
                       )}
@@ -798,7 +948,7 @@ function App() {
                       <div className={`message-content ${message.isLoading ? 'loading-message' : ''}`}>
                         {message.displayedContent !== undefined ? message.displayedContent : message.content}
                         {message.isAnimating && <span className="cursor-blink">|</span>}
-                        {message.isLoading && <span className="loading-dots"></span>}
+                        {message.isLoading && <span className="loading-dots"><span></span></span>}
                       </div>
                     </div>
                   );
@@ -889,7 +1039,10 @@ function App() {
       </button>
 
       {/* Personas Bin */}
-      <div className={`personas-bin ${showPersonasBin ? 'show' : ''}`}>
+      <div 
+        ref={personasBinRef}
+        className={`personas-bin ${showPersonasBin ? 'show' : ''}`}
+      >
         <div className="personas-bin-header">
           <h3>Select Personas</h3>
           <button 
