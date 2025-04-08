@@ -112,7 +112,6 @@ function App() {
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
   const [directMentionTo, setDirectMentionTo] = useState(null);
   const inputRef = useRef(null);
-  const mentionDropdownRef = useRef(null);
   const [conversationId, setConversationId] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
@@ -121,6 +120,9 @@ function App() {
   const [hasMessages, setHasMessages] = useState(false);
   const personasBinRef = useRef(null);
   const [agentQuestionTarget, setAgentQuestionTarget] = useState(null);
+  const chatContainerRef = useRef(null);
+  const mentionDropdownRef = useRef(null);
+  const [chatVisible, setChatVisible] = useState(false);
 
   // Initialize conversation ID and check authentication status
   useEffect(() => {
@@ -175,12 +177,20 @@ function App() {
     );
   };
 
+  // Update for smooth scrolling during text generation
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current) {
+      requestAnimationFrame(() => {
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
   };
 
+  // Set hasMessages to true when first message is added
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > 0 && !hasMessages) {
+      setHasMessages(true);
+    }
   }, [messages]);
 
   // Add a new effect to ensure the input stays visible when the keyboard appears on mobile
@@ -196,19 +206,112 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Enhanced function to detect if a message contains a question directed at another agent
+  // Add event listener to detect clicks outside the personas bin and dismiss
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Close personas bin when clicking outside
+      if (showPersonasBin && personasBinRef.current && !personasBinRef.current.contains(event.target)) {
+        setShowPersonasBin(false);
+      }
+      
+      // Close any expanded categories when clicking outside
+      if (expandedCategories.length > 0) {
+        const categoryElements = document.querySelectorAll('.category-section');
+        let clickedInsideCategory = false;
+        
+        categoryElements.forEach(element => {
+          if (element.contains(event.target)) {
+            clickedInsideCategory = true;
+          }
+        });
+        
+        if (!clickedInsideCategory) {
+          setExpandedCategories([]);
+        }
+      }
+      
+      // Close mention dropdown when clicking outside
+      if (showMentionDropdown && mentionDropdownRef.current && !mentionDropdownRef.current.contains(event.target)) {
+        setShowMentionDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showPersonasBin, expandedCategories, showMentionDropdown]);
+
+  // Format a message for debate mode to ensure personas remain in character and interact naturally
+  const formatDebateMessage = (message, selectedPersonaIds) => {
+    const selectedPersonaPrompts = selectedPersonaIds.map(id => {
+      const persona = Object.values(PERSONA_CATEGORIES)
+        .flatMap(category => category.personas)
+        .find(p => p.id === id);
+      return `${persona.name} (${persona.description}): ${AGENT_PROMPTS[id] || ''}`;
+    }).join('\n\n');
+
+    return `${message}\n\n
+[CRITICAL CHARACTER INSTRUCTIONS: 
+1. You must never break character. You are ${Object.values(PERSONA_CATEGORIES)
+    .flatMap(category => category.personas)
+    .find(p => selectedPersonaIds.includes(p.id)).name}.
+2. Maintain the authentic voice, beliefs, vocabulary, and perspective of your character at all times.
+3. Keep your response brief (2-4 sentences maximum).
+4. Based on what others have said, ask ONE thoughtful question to another participant.
+5. Reference others' perspectives directly when appropriate.
+6. Never use modern terminology or references that would be unknown to your character.
+
+The following personas are participating in this discussion:
+${selectedPersonaPrompts}]`;
+  };
+
+  // Format a message with instructions for the mentioned agent
+  const formatMentionedMessage = (agentId, message, isMentioned, isPriorityMention) => {
+    console.log(`Formatting message for ${agentId} - isMentioned: ${isMentioned}, isPriority: ${isPriorityMention}`);
+    const personaName = getPersonaName(agentId);
+    const agentPrompt = AGENT_PROMPTS[agentId] || "";
+    
+    // Base instruction that identifies the persona and includes their prompt
+    const baseInstructions = `You are ${personaName}. ${agentPrompt}\n\n`;
+    
+    // Important character consistency instructions
+    const characterConsistencyInstructions = `
+IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
+1. You must NEVER break character. Stay 100% in character as ${personaName} at all times.
+2. Maintain your authentic voice, vocabulary, beliefs, and opinions that align with your character.
+3. Use language, expressions, and references that would be natural for your character and time period.
+4. Keep responses concise and direct - ${isPriorityMention ? "2-4 short sentences maximum" : "1-2 short sentences maximum"}.
+5. When appropriate, ask thoughtful questions that your character would naturally ask.
+6. Never reference being an AI, language model, or assistant - respond as the actual historical/fictional character.
+7. Respond directly without phrases like "As [name]" or signing your name.
+8. If your character wouldn't know about modern concepts, don't pretend that you do.
+`;
+
+    // Different instructions based on whether the agent is mentioned directly
+    const mentionInstructions = isMentioned
+      ? isPriorityMention 
+        ? "You have been DIRECTLY addressed in this message. Provide a thoughtful, authentic response from your character's perspective. Express your views confidently and consider asking a follow-up question if appropriate."
+        : "You were mentioned in this message, but are not the primary focus. Provide a brief but insightful comment that represents your character's unique perspective."
+      : "You were NOT directly addressed in this message. Only respond if you have a strong perspective to add based on your character's unique viewpoint. Your response should be very brief (1 sentence). If you have nothing valuable to contribute from your character's perspective, don't respond at all.";
+
+    // Return the formatted message with all instructions
+    return `${baseInstructions}${characterConsistencyInstructions}${mentionInstructions}\n\nMessage: ${message}`;
+  };
+
+  // Enhanced function to detect when personas are asking questions to each other
   const detectQuestionTarget = (content, allAgents) => {
     if (!content) return null;
     
     // Check for question patterns directed at specific agents
     const sentences = content.split(/[.!?]\s+/);
     
-    // Look at the last 1-2 sentences for questions
+    // Look at the last 2 sentences for questions
     const lastSentences = sentences.slice(-2).join('. ');
     
     // Check if the last part contains a question mark
     if (lastSentences.includes('?')) {
-      // Check for agent names in the question
+      // Check for agent names in the question context
       for (const agentId of allAgents) {
         const agentName = getPersonaName(agentId);
         const readableId = agentId.replace(/_/g, ' ');
@@ -219,13 +322,36 @@ function App() {
             lastSentences.indexOf('?') > lastSentences.toLowerCase().indexOf(agentName.toLowerCase())) {
           return agentId;
         }
+        
+        // Also check for direct @ mentions followed by a question
+        if (lastSentences.includes(`@${agentName}`) || lastSentences.includes(`@${readableId}`)) {
+          return agentId;
+        }
+        
+        // Check for "What do you think, [name]?" pattern
+        const thinkPattern = new RegExp(`what (do|would|does|might) (you|${agentName}|${readableId}) think`, 'i');
+        if (thinkPattern.test(lastSentences)) {
+          return agentId;
+        }
+        
+        // Check for addressing someone by name at the beginning of a question
+        const nameFirstPattern = new RegExp(`(${agentName}|${readableId})[,:]? (what|why|how|do|would|could|can|should)`, 'i');
+        if (nameFirstPattern.test(lastSentences)) {
+          return agentId;
+        }
+        
+        // Check for agent questions like "Do you agree, [name]?"
+        const agreePattern = new RegExp(`(do|would) (you|${agentName}|${readableId}) agree`, 'i');
+        if (agreePattern.test(lastSentences)) {
+          return agentId;
+        }
       }
     }
     
     return null;
   };
 
-  // Updated handleInputChange function to properly handle @ mentions
+  // Enhanced function to handle @ mentions with better persona awareness
   const handleInputChange = (e) => {
     const value = e.target.value;
     setInputText(value);
@@ -242,464 +368,310 @@ function App() {
       
       // Only process if cursor is after the @ symbol
       if (cursorPosition > lastAtSymbolIndex) {
-        // Find the end of the current word (space or end of string)
-        const textAfterAt = value.substring(lastAtSymbolIndex + 1);
+        // Find the text after @ until a space or end of string
+        const textAfterAt = value.substring(lastAtSymbolIndex + 1, cursorPosition);
         const nextSpaceIndex = textAfterAt.indexOf(' ');
-        const searchEnd = nextSpaceIndex !== -1 ? nextSpaceIndex : textAfterAt.length;
+        const searchText = nextSpaceIndex !== -1 ? textAfterAt.substring(0, nextSpaceIndex) : textAfterAt;
         
-        // Check if we're in the middle of typing a mention
-        if (nextSpaceIndex === -1 || cursorPosition <= lastAtSymbolIndex + 1 + searchEnd) {
-          const searchText = value.substring(lastAtSymbolIndex + 1, lastAtSymbolIndex + 1 + searchEnd);
+        // If we have search text, show dropdown and position it
+        if (searchText.length > 0) {
           setMentionSearch(searchText);
-          
-          // Calculate position for dropdown
-          const inputRect = inputRef.current.getBoundingClientRect();
-          const textWidth = getTextWidth(value.substring(0, lastAtSymbolIndex), getComputedStyle(inputRef.current).font);
-          
-          setMentionPosition({
-            top: inputRect.top - 5,
-            left: inputRect.left + textWidth + 5
-          });
-          
           setShowMentionDropdown(true);
-          return;
+          
+          // Set the direct mention target for faster mentions
+          const matchingPersonas = selectedPersonas.filter(personaId => 
+            getPersonaName(personaId).toLowerCase().includes(searchText.toLowerCase())
+          );
+          
+          if (matchingPersonas.length === 1) {
+            setDirectMentionTo(matchingPersonas[0]);
+          } else {
+            setDirectMentionTo(null);
+          }
+          
+          // Position the dropdown near the @ symbol
+          setTimeout(() => {
+            if (inputRef.current) {
+              const inputRect = inputRef.current.getBoundingClientRect();
+              const atPosition = getTextWidth(value.substring(0, lastAtSymbolIndex), getComputedStyle(inputRef.current).font);
+              
+              setMentionPosition({
+                top: inputRect.top - 150, // Position above the input
+                left: inputRect.left + atPosition
+              });
+            }
+          }, 0);
+        } else {
+          setShowMentionDropdown(false);
         }
       }
+    } else {
+      setShowMentionDropdown(false);
     }
-    
-    // If we reach here, we're not processing a mention
-    setShowMentionDropdown(false);
   };
-  
-  // Helper to calculate text width
+
+  // Helper function to get text width
   const getTextWidth = (text, font) => {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     context.font = font;
-    return context.measureText(text).width;
+    const metrics = context.measureText(text);
+    return metrics.width;
   };
-  
-  // Updated selectMention function to properly handle the selection
-  const selectMention = (personaId) => {
-    const lastAtSymbolIndex = inputText.lastIndexOf('@');
-    if (lastAtSymbolIndex === -1) return;
-    
-    // Find if there's a space after the @ symbol
-    const textAfterAt = inputText.substring(lastAtSymbolIndex + 1);
-    const nextSpaceIndex = textAfterAt.indexOf(' ');
-    
-    // Extract text before and after the mention
-    const beforeMention = inputText.substring(0, lastAtSymbolIndex);
-    const afterMention = nextSpaceIndex !== -1 
-      ? inputText.substring(lastAtSymbolIndex + 1 + nextSpaceIndex)
-      : '';
-    
-    const personaName = getPersonaName(personaId);
-    
-    // Set the new text with the completed mention
-    setInputText(`${beforeMention}@${personaName} ${afterMention}`);
-    setShowMentionDropdown(false);
-    setDirectMentionTo(personaId);
-    
-    // Focus and move cursor after the inserted mention
-    setTimeout(() => {
-      inputRef.current.focus();
-      const newCursorPosition = beforeMention.length + personaName.length + 2; // +2 for @ and space
-      inputRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
-    }, 0);
-  };
-  
-  // Close mention dropdown if clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (mentionDropdownRef.current && !mentionDropdownRef.current.contains(event.target)) {
-        setShowMentionDropdown(false);
-      }
-    };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
-  // Update the message formatting for mentions to have better tag-based reply hierarchy
-  const formatMentionedMessage = (agentId, question, priorityAgent, otherAgents) => {
-    const isMentioned = agentId === priorityAgent;
-    const otherAgentNames = otherAgents.map(id => getPersonaName(id)).join(', ');
+  // Handle mention selection
+  const handleMentionSelect = (personaId) => {
+    const personaName = getPersonaName(personaId);
+    const lastAtSymbolIndex = inputText.lastIndexOf('@');
     
-    if (isMentioned) {
-      // This is the directly mentioned agent - they should respond fully
-      return `${question}\n\n[You've been directly mentioned/asked. Provide a full response in 2-4 sentences.]`;
-    } else {
-      // Other agents should only respond if they disagree or have something valuable to add
-      return `${question}\n\n[${getPersonaName(priorityAgent)} has been directly addressed in this message. Only respond if you strongly disagree or have an essential insight to add. If you simply agree, just say "I agree with ${getPersonaName(priorityAgent)}" in your own voice/style. Keep your response to 1-2 sentences maximum.]`;
+    if (lastAtSymbolIndex !== -1) {
+      // Replace the @mention with the selected persona
+      const textBeforeAt = inputText.substring(0, lastAtSymbolIndex);
+      const textAfterAt = inputText.substring(lastAtSymbolIndex + 1);
+      const nextSpaceIndex = textAfterAt.indexOf(' ');
+      const restOfText = nextSpaceIndex !== -1 ? textAfterAt.substring(nextSpaceIndex) : '';
+      
+      const newText = `${textBeforeAt}@${personaName} ${restOfText}`;
+      setInputText(newText);
+      
+      // Focus back on input and put cursor at the end of the mention
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          const cursorPosition = textBeforeAt.length + personaName.length + 2; // +2 for @ and space
+          inputRef.current.setSelectionRange(cursorPosition, cursorPosition);
+        }
+      }, 0);
     }
+    
+    setShowMentionDropdown(false);
+  };
+
+  // Apply character consistency checks to agent responses
+  const applyCharacterConsistencyCheck = (agentId, responseText) => {
+    const personaName = getPersonaName(agentId);
+    
+    // Remove any auto-signatures or meta comments like "- [name]" that LLMs tend to add
+    let enhancedResponse = responseText
+      .replace(new RegExp(`- ${personaName}$`, 'i'), '')
+      .replace(new RegExp(`—${personaName}$`, 'i'), '')
+      .replace(/^\[.*?\]/, '') // Remove any meta instructions that leaked into responses
+      .trim();
+    
+    // Check for inconsistent language based on persona characteristics
+    // Historical figures shouldn't use modern colloquialisms
+    const isHistoricalFigure = AGENT_PROMPTS[agentId]?.includes('historical') || 
+                              AGENT_PROMPTS[agentId]?.includes('century') ||
+                              /(\d{3,4}s|-\d{3,4})/.test(AGENT_PROMPTS[agentId] || '');
+    
+    if (isHistoricalFigure) {
+      // Replace modern terms with more timeless equivalents
+      const modernTerms = {
+        'okay': 'very well',
+        'ok': 'very well',
+        'yeah': 'yes',
+        'cool': 'excellent',
+        'awesome': 'marvelous',
+        'guy': 'man',
+        'totally': 'completely',
+        'wow': 'my word',
+        'lol': '',
+        'omg': 'goodness',
+        'gonna': 'going to',
+        'wanna': 'want to',
+        'gotta': 'must',
+        "don't": "do not",
+        "can't": "cannot",
+        "wouldn't": "would not",
+        "shouldn't": "should not",
+        "isn't": "is not"
+      };
+      
+      Object.entries(modernTerms).forEach(([modern, historical]) => {
+        const regex = new RegExp(`\\b${modern}\\b`, 'gi');
+        enhancedResponse = enhancedResponse.replace(regex, historical);
+      });
+    }
+    
+    // Ensure response is concise (2-4 sentences for priority agent, 1-2 for others)
+    const sentences = enhancedResponse.split(/[.!?]\s+/);
+    if (sentences.length > 4) {
+      // Keep only the first 4 sentences for priority responses, or 2 for others
+      const keepSentences = 4;
+      enhancedResponse = sentences.slice(0, keepSentences).join('. ') + '.';
+    }
+    
+    return enhancedResponse;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!inputText.trim() || selectedPersonas.length === 0 || isLoading || animatingText) return;
-
-    // Set hasMessages to true when first message is sent
+    
+    if (!inputText.trim() || selectedPersonas.length === 0 || isLoading) return;
+    
+    setIsLoading(true);
+    
+    // Add user message
+    const userMessage = {
+      id: Date.now(),
+      text: inputText,
+      sender: 'user',
+      timestamp: new Date().toISOString(),
+    };
+    
+    setMessages(prevMessages => [...prevMessages, userMessage]);
+    setInputText('');
+    
+    // Determine which agents should respond based on mentions
+    const { priorityAgentId, nonPriorityAgentIds } = parseMentions(inputText);
+    
+    // Set hasMessages to true for UI display
     if (!hasMessages) {
       setHasMessages(true);
     }
-
-    setIsLoading(true);
+    
+    // Scroll to bottom when new message is added
+    scrollToBottom();
     
     try {
-      // Add the user message immediately
-      const userMessage = { 
-        type: 'user', 
-        content: inputText,
-        conversationId: conversationId,
-        timestamp: new Date().toISOString(),
+      // Create a dictionary to store agent prompts
+      const agentPrompts = {};
+      
+      // Format prompt for priority agent if exists
+      if (priorityAgentId) {
+        agentPrompts[priorityAgentId] = formatMentionedMessage(
+          priorityAgentId, 
+          inputText, 
+          true,  // isMentioned 
+          true   // isPriorityMention
+        );
+      }
+      
+      // Format prompts for non-priority mentioned agents
+      for (const agentId of nonPriorityAgentIds) {
+        agentPrompts[agentId] = formatMentionedMessage(
+          agentId, 
+          inputText, 
+          true,  // isMentioned
+          false  // isPriorityMention
+        );
+      }
+      
+      // If no mentions, select a random agent to respond
+      if (!priorityAgentId && nonPriorityAgentIds.length === 0 && selectedPersonas.length > 0) {
+        // Pick a random agent from selected personas
+        const randomIndex = Math.floor(Math.random() * selectedPersonas.length);
+        const randomAgentId = selectedPersonas[randomIndex];
+        
+        agentPrompts[randomAgentId] = formatMentionedMessage(
+          randomAgentId,
+          inputText,
+          false,  // not directly mentioned
+          true    // but should respond as primary
+        );
+      }
+      
+      // Prepare the API payload
+      const apiPayload = {
+        question: inputText,
+        agent_prompts: agentPrompts,
+        conversation_history: messages.slice(-10).map(m => ({
+          sender: m.sender,
+          text: m.text,
+          timestamp: m.timestamp
+        })),
+        priority_agent: priorityAgentId || Object.keys(agentPrompts)[0]
       };
-      setMessages(prev => [...prev, userMessage]);
       
-      // Add a loading message right after the user message
-      const loadingMessage = {
-        type: 'system',
-        content: 'The AI personas are thinking...',
-        displayedContent: 'The AI personas are thinking...',
-        timestamp: new Date().toISOString(),
-        isLoading: true
-      };
-      setMessages(prev => [...prev, loadingMessage]);
-      
-      // Clear input immediately after submitting
-      setInputText('');
-
-      // Determine which agents should respond based on direct mention or previous question
-      let agentsToUse = selectedPersonas;
-      let priorityAgent = null;
-      
-      // Check if there's a direct mention from the user
-      if (directMentionTo && selectedPersonas.includes(directMentionTo)) {
-        priorityAgent = directMentionTo;
-      }
-      // Or if there was a question directed at a specific agent in the last message
-      else if (agentQuestionTarget && selectedPersonas.includes(agentQuestionTarget)) {
-        priorityAgent = agentQuestionTarget;
-        setAgentQuestionTarget(null); // Reset after using
-      }
-      
-      // If we have a priority agent, reorganize the agents list
-      if (priorityAgent) {
-        // Move the priority agent to the front of the array
-        agentsToUse = [priorityAgent, ...selectedPersonas.filter(id => id !== priorityAgent)];
-      }
-
-      // Get responses from the backend with instructions for brevity and tag-based hierarchy
-      let enhancedQuestion = inputText;
-
-      // Check if we have a priority agent (either from direct mention or question)
-      if (priorityAgent) {
-        const nonPriorityAgents = selectedPersonas.filter(id => id !== priorityAgent);
-        enhancedQuestion = formatMentionedMessage(priorityAgent, inputText, priorityAgent, nonPriorityAgents);
-      } else {
-        // No specific agent is targeted, just keep responses brief
-        enhancedQuestion += "\n\n[Please keep your response brief and to the point, no more than 2-4 sentences]";
-      }
-
-      const response = await apiCall('/seminar', 'POST', {
-        question: enhancedQuestion,
-        agent_ids: agentsToUse,
-        conversation_id: conversationId,
-        auto_conversation: autoDebate,
-        max_rounds: maxRounds,
-        direct_mention: directMentionTo // Pass direct mention to backend
+      // Call the API to get responses
+      const response = await fetch('/api/socratic', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(apiPayload),
       });
-
-      // Reset direct mention after submission
-      setDirectMentionTo(null);
-
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`HTTP error! status: ${response.status}, body: ${errorText}`);
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      // Capture the raw response text before parsing
-      const responseText = await response.text();
-      console.log('Raw response text:', responseText);
-      
-      // Try to parse the JSON response safely
-      let data;
-      try {
-        data = JSON.parse(responseText);
-        console.log('Parsed data:', data);
-      } catch (jsonError) {
-        console.error('JSON parsing error:', jsonError);
-        throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
+        throw new Error(`API responded with status: ${response.status}`);
       }
       
-      // Temporary debug panel information
-      setDebugInfo({
-        responseStatus: response.status,
-        responseText: responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''),
-        parsedData: data
-      });
+      const responseData = await response.json();
       
-      // Enable debug mode automatically if there's an issue
-      if (!debugMode) {
-        setDebugMode(true);
-      }
+      // Process API responses
+      let agentResponses = {};
       
-      // Map responses to message objects
-      // Handle different API response formats with comprehensive safeguards
-      let responseArray = [];
-      
-      if (!data) {
-        throw new Error("Received empty response from server");
+      if (responseData.responses && typeof responseData.responses === 'object') {
+        // New format with multiple agent responses
+        agentResponses = responseData.responses;
+      } else if (responseData.response) {
+        // Legacy format with single response
+        const priorityAgent = priorityAgentId || Object.keys(agentPrompts)[0];
+        agentResponses[priorityAgent] = responseData.response;
+      } else {
+        console.error('Unexpected response format:', responseData);
+        throw new Error('Unexpected response format from API');
       }
       
-      console.log('Response data structure:', Object.keys(data));
+      // Add responses to the messages list with a delay between each
+      const addAgentMessage = (agentId, text, delay) => {
+        return new Promise(resolve => {
+          setTimeout(() => {
+            const enhancedResponse = applyCharacterConsistencyCheck(agentId, text);
+            
+            setMessages(prevMessages => [
+              ...prevMessages,
+              {
+                id: Date.now() + Math.random(),
+                text: enhancedResponse,
+                sender: agentId,
+                timestamp: new Date().toISOString(),
+                inReplyTo: userMessage.id
+              }
+            ]);
+            resolve();
+          }, delay);
+        });
+      };
       
-      // Try different potential response formats
-      if (data.answers && Array.isArray(data.answers)) {
-        console.log('Using data.answers format');
-        responseArray = data.answers;
-      } 
-      else if (data.responses && Array.isArray(data.responses)) {
-        console.log('Using data.responses format');
-        responseArray = data.responses;
-        
-        if (data.additional_rounds && Array.isArray(data.additional_rounds)) {
-          console.log('Adding additional_rounds');
-          // Flatten the additional rounds
-          try {
-            const additionalResponses = data.additional_rounds.flat();
-            responseArray = [...responseArray, ...additionalResponses];
-          } catch (flatError) {
-            console.error('Error flattening additional_rounds:', flatError);
-            // Just try to use the initial responses
-          }
-        }
-      }
-      else if (Array.isArray(data)) {
-        console.log('Using direct array format');
-        responseArray = data;
-      }
-      // Check for other potential response formats
-      else if (data.result && Array.isArray(data.result)) {
-        console.log('Using data.result format');
-        responseArray = data.result;
-      }
-      else if (data.data && Array.isArray(data.data)) {
-        console.log('Using data.data format');
-        responseArray = data.data;
-      }
-      // If we have a single response object, wrap it in an array
-      else if (data.response || data.answer) {
-        console.log('Using single response/answer format');
-        const singleResponse = data.response || data.answer;
-        if (typeof singleResponse === 'object') {
-          responseArray = [singleResponse];
-        }
-      }
-      // Last resort - try to extract any array from the response
-      else {
-        console.error("Unexpected API response format:", data);
-        // Look for any array in the response
-        for (const key in data) {
-          if (Array.isArray(data[key])) {
-            console.log(`Found array in data.${key}`);
-            responseArray = data[key];
-            break;
-          }
-        }
-        
-        // If still no array found, create a basic error message
-        if (responseArray.length === 0) {
-          throw new Error("Could not find valid response data in the API response");
+      // Order the responses: priority agent first, then others
+      const orderedAgentIds = [
+        priorityAgentId || Object.keys(agentPrompts)[0],
+        ...Object.keys(agentResponses).filter(id => id !== (priorityAgentId || Object.keys(agentPrompts)[0]))
+      ];
+      
+      // Add each response with a natural delay
+      let cumulativeDelay = 0;
+      for (const agentId of orderedAgentIds) {
+        if (agentResponses[agentId]) {
+          // Base delay on message length for natural feeling
+          const baseDelay = Math.min(agentResponses[agentId].length * 5, 800);
+          await addAgentMessage(agentId, agentResponses[agentId], cumulativeDelay);
+          cumulativeDelay += baseDelay;
         }
       }
       
-      if (responseArray.length === 0) {
-        throw new Error("Received empty response array from server");
-      }
+      // Scroll to the newest message after all agents have responded
+      setTimeout(() => {
+        scrollToBottom();
+      }, cumulativeDelay + 100);
       
-      console.log('Final responseArray:', responseArray);
-      
-      // Make sure the array items have the required properties
-      const sanitizedArray = responseArray.map(item => {
-        // Create a sanitized version with default values if properties are missing
-        return {
-          agent: item.agent || item.personaId || 'system',
-          response: item.response || item.content || item.message || JSON.stringify(item),
-          model: item.model || 'unknown'
-        };
-      });
-      
-      console.log('Sanitized array:', sanitizedArray);
-      
-      // Now use the sanitized array
-      const personaResponses = sanitizedArray.map(answer => ({
-        type: answer.agent === 'system' ? 'system' : 'persona',
-        personaId: answer.agent,
-        content: answer.response,
-        timestamp: new Date().toISOString(),
-        conversationId: data.conversation_id || conversationId,
-        displayedContent: '', // Initialize with empty string for animation
-        fullContent: answer.response // Store the full content
-      }));
-      
-      // Update debug info with the processed arrays
-      setDebugInfo({
-        responseStatus: response.status,
-        responseText: responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''),
-        parsedData: data,
-        responseArray: responseArray,
-        sanitizedArray: sanitizedArray,
-        personaResponses: personaResponses
-      });
-
-      // Remove the loading message before adding the responses
-      setMessages(prev => prev.filter(msg => !msg.isLoading));
-
-      // Add responses one by one with animation
-      setAnimatingText(true);
-      
-      let updatedMessages = messages.filter(msg => !msg.isLoading);
-      if (!updatedMessages.includes(userMessage)) {
-        updatedMessages.push(userMessage);
-      }
-
-      for (let i = 0; i < personaResponses.length; i++) {
-        const response = personaResponses[i];
-        
-        // Determine if this message is replying to another agent
-        const replyToMessage = response.type === 'persona' 
-          ? detectReplyTarget(response.fullContent, response.personaId, updatedMessages)
-          : null;
-        
-        // Check if this is a response to a direct question
-        const isAnsweringQuestion = agentQuestionTarget === response.personaId;
-        
-        // Add initial response with empty content
-        const newMessage = {
-          ...response,
-          displayedContent: '',
-          isAnimating: true,
-          replyTo: replyToMessage,
-          isAnsweringQuestion: isAnsweringQuestion
-        };
-        
-        updatedMessages.push(newMessage);
-        setMessages([...updatedMessages]);
-        scrollToBottom(); // Ensure we scroll as new messages are added
-        
-        // Animate the text
-        const text = response.fullContent;
-        let displayedText = '';
-        
-        for (let j = 0; j < text.length; j++) {
-          // Add one character at a time
-          displayedText += text[j];
-          
-          updatedMessages[updatedMessages.length - 1] = {
-            ...updatedMessages[updatedMessages.length - 1],
-            displayedContent: displayedText
-          };
-          
-          setMessages([...updatedMessages]);
-          
-          // Only scroll periodically during animation to avoid jerky scrolling
-          if (j % 20 === 0) {
-            // Use requestAnimationFrame to ensure smooth scrolling during animation
-            requestAnimationFrame(() => {
-              scrollToBottom();
-            });
-          }
-          
-          // Delay between each character (faster for system messages)
-          await new Promise(resolve => setTimeout(resolve, 
-            response.type === 'system' ? 10 : 20
-          ));
-        }
-        
-        // Mark animation as complete for this message
-        updatedMessages[updatedMessages.length - 1] = {
-          ...updatedMessages[updatedMessages.length - 1],
-          isAnimating: false
-        };
-        
-        setMessages([...updatedMessages]);
-        scrollToBottom(); // Final scroll once message is complete
-        
-        // Delay between each message
-        if (i < personaResponses.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
-      }
-      
-      setAnimatingText(false);
-
-      // After processing all responses, check the last one for a question
-      const lastPersonaResponse = personaResponses[personaResponses.length - 1];
-      if (lastPersonaResponse && lastPersonaResponse.type === 'persona') {
-        const targetAgentId = detectQuestionTarget(lastPersonaResponse.content, selectedPersonas);
-        if (targetAgentId && targetAgentId !== lastPersonaResponse.personaId) {
-          setAgentQuestionTarget(targetAgentId);
-          console.log(`Detected question from ${lastPersonaResponse.personaId} to ${targetAgentId}`);
-        }
-      }
     } catch (error) {
-      console.error('Error in handleSubmit:', error);
-      // Add a more detailed error message to chat
-      let errorMessage = error.message || 'There was an error getting responses. Please try again.';
+      console.error('Error generating response:', error);
       
-      // Check for common connection issues
-      if (error.message && error.message.includes('NetworkError') || 
-          error.message.includes('Failed to fetch') || 
-          error.message.includes('Network request failed')) {
-        errorMessage = 'Unable to connect to the backend server. This may be because the backend service is still spinning up (this can take 1-2 minutes on first load) or there is a network issue. Please wait a moment and try again.';
-        
-        // Generate fallback client-side responses if there's a connection issue
-        const fallbackResponses = generateFallbackResponse(inputText, selectedPersonas);
-        console.log('Using fallback responses:', fallbackResponses);
-        
-        // Add system message about fallback mode
-        setMessages(prev => [...prev, {
-          type: 'system',
-          content: `Note: Using fallback mode due to connection issues. These responses are generated client-side and are limited.`,
-          displayedContent: `Note: Using fallback mode due to connection issues. These responses are generated client-side and are limited.`,
-          timestamp: new Date().toISOString()
-        }]);
-        
-        // Process and display the fallback responses
-        const personaResponses = fallbackResponses.map(response => ({
-          type: 'persona',
-          personaId: response.agent,
-          content: response.response,
-          displayedContent: response.response,
+      // Add error message
+      setMessages(prevMessages => [
+        ...prevMessages,
+        {
+          id: Date.now(),
+          text: `I'm sorry, there was an error processing your request. Please try again.`,
+          sender: 'system',
           timestamp: new Date().toISOString(),
-          conversationId: conversationId,
-          isAnimating: false
-        }));
-        
-        // Add the fallback responses to the messages
-        setMessages(prev => [...prev, ...personaResponses]);
-        setAnimatingText(false);
-        setIsLoading(false);
-        return; // Exit early since we've handled it with fallbacks
-      } else if (error.message && error.message.includes('Unexpected response format')) {
-        errorMessage = 'Received an unexpected response format from the server. This might be due to API changes or backend issues.';
-      }
+        }
+      ]);
       
-      setMessages(prev => [...prev, {
-        type: 'system',
-        content: `Error: ${errorMessage}`,
-        displayedContent: `Error: ${errorMessage}`,
-        timestamp: new Date().toISOString(),
-        error: true
-      }]);
-      setAnimatingText(false);
     } finally {
       setIsLoading(false);
-      scrollToBottom(); // Ensure we're scrolled to bottom after everything
     }
   };
 
@@ -746,91 +718,103 @@ function App() {
     };
   }, [debugMode]);
 
-  // Add event listener to detect clicks outside the personas bin
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showPersonasBin && 
-          personasBinRef.current && 
-          !personasBinRef.current.contains(event.target) &&
-          !event.target.closest('.floating-button')) {
-        setShowPersonasBin(false);
-      }
-    };
+  // Enhanced function to detect replies between agents
+  const detectReplyTarget = (content, currentPersonaId, allMessages) => {
+    if (!content) return null;
     
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showPersonasBin]);
-
-  // Function to detect which agent a message is replying to
-  const detectReplyTarget = (content, personaId, allMessages) => {
-    if (!content || allMessages.length < 2) return null;
+    // Get all persona messages (excluding the current persona)
+    const personaMessages = allMessages.filter(
+      msg => msg.type === 'persona' && msg.personaId !== currentPersonaId
+    );
     
-    // Get previous agent messages
-    const previousAgentMessages = allMessages
-      .filter(m => m.type === 'persona' && m.personaId !== personaId)
-      .map(m => ({
-        personaId: m.personaId,
-        name: getPersonaName(m.personaId),
-        nameLower: getPersonaName(m.personaId).toLowerCase(),
-        message: m,
-        index: allMessages.indexOf(m)
-      }));
+    if (personaMessages.length === 0) return null;
     
-    // Skip if no previous messages to respond to
-    if (previousAgentMessages.length === 0) return null;
-    
-    // Check for direct references to another agent in the first two sentences
-    const firstTwoSentences = content.split(/[.!?]\s+/).slice(0, 2).join(". ") + ".";
-    
-    // Check for explicit reply patterns like "Replying to X" or "In response to X"
-    const replyPatterns = [
-      /replying\s+to\s+(\w+)/i,
-      /in\s+response\s+to\s+(\w+)/i,
-      /addressing\s+(\w+)/i,
-      /to\s+answer\s+(\w+)/i,
-    ];
-    
-    for (const pattern of replyPatterns) {
-      const match = firstTwoSentences.match(pattern);
-      if (match && match[1]) {
-        const mentionedName = match[1].toLowerCase();
-        // Find agent that matches this mention
-        const matchedAgent = previousAgentMessages.find(agent => 
-          agent.nameLower.toLowerCase().includes(mentionedName) || 
-          agent.personaId.toLowerCase().includes(mentionedName)
-        );
-        if (matchedAgent) return matchedAgent.index;
-      }
-    }
-    
-    for (const prevAgent of previousAgentMessages.reverse()) { // Check most recent first
-      // Check for direct name mentions
-      if (
-        firstTwoSentences.includes(prevAgent.name) || 
-        firstTwoSentences.toLowerCase().includes(prevAgent.nameLower)
-      ) {
-        return prevAgent.index;
-      }
+    // Check for mentions of other personas by name
+    for (const message of personaMessages) {
+      const personaName = getPersonaName(message.personaId);
+      const personaDisplayName = personaName.replace(/_/g, ' ');
       
-      // Check for ID mentions (like "Socrates" for "socrates")
-      const readableId = prevAgent.personaId.replace(/_/g, ' ');
+      // Look for persona name patterns in the content
       if (
-        firstTwoSentences.includes(readableId) || 
-        firstTwoSentences.toLowerCase().includes(readableId.toLowerCase())
+        content.includes(`@${personaName}`) || 
+        content.includes(`@${personaDisplayName}`) ||
+        content.toLowerCase().includes(`${personaName.toLowerCase()},`) ||
+        content.toLowerCase().includes(`${personaDisplayName.toLowerCase()},`) ||
+        (content.toLowerCase().includes(personaName.toLowerCase()) && 
+         content.toLowerCase().includes('you said'))
       ) {
-        return prevAgent.index;
+        return message;
       }
-    }
-    
-    // If we've gone through multiple rounds and this is the first message in a new round,
-    // assume it's replying to the last message from the previous round
-    if (autoDebate && previousAgentMessages.length > 0) {
-      return previousAgentMessages[0].index; // Most recent previous agent message
     }
     
     return null;
+  };
+
+  // New function to parse @ mentions and determine which agents should respond
+  const parseMentions = (message) => {
+    if (!message) return { priorityAgentId: null, nonPriorityAgentIds: [] };
+    
+    const mentionedAgentIds = [];
+    const lowerMessage = message.toLowerCase();
+    
+    // Check for direct mentions using @ symbol
+    const atMentions = message.match(/@(\w+)/g) || [];
+    for (const mention of atMentions) {
+      const mentionedName = mention.substring(1).toLowerCase(); // Remove the @ symbol
+      
+      // Look for a matching persona by name or ID
+      for (const category of Object.values(PERSONA_CATEGORIES)) {
+        for (const persona of category.personas) {
+          const personaName = persona.name.toLowerCase();
+          const personaId = persona.id.toLowerCase();
+          
+          if (personaName.includes(mentionedName) || mentionedName.includes(personaName) || 
+              personaId.includes(mentionedName) || mentionedName.includes(personaId)) {
+            if (!mentionedAgentIds.includes(persona.id)) {
+              mentionedAgentIds.push(persona.id);
+            }
+          }
+        }
+      }
+    }
+    
+    // Check for names mentioned without @ symbol
+    if (atMentions.length === 0) {
+      // Only check for name mentions if no @ mentions were found
+      for (const category of Object.values(PERSONA_CATEGORIES)) {
+        for (const persona of category.personas) {
+          const personaName = persona.name.toLowerCase();
+          const personaId = persona.id.toLowerCase().replace(/_/g, ' ');
+          
+          // Check if the persona name is mentioned in the message
+          if (lowerMessage.includes(personaName) || lowerMessage.includes(personaId)) {
+            if (!mentionedAgentIds.includes(persona.id)) {
+              mentionedAgentIds.push(persona.id);
+            }
+          }
+        }
+      }
+    }
+    
+    // Check for questions directed at specific personas
+    const questionTarget = detectQuestionTarget(message, selectedPersonas);
+    if (questionTarget && !mentionedAgentIds.includes(questionTarget)) {
+      mentionedAgentIds.push(questionTarget);
+    }
+    
+    // If no mentions were found and we have selected personas, we'll need a random response
+    if (mentionedAgentIds.length === 0 && selectedPersonas.length > 0) {
+      // Return no specific mentions - will trigger random response behavior
+      return { priorityAgentId: null, nonPriorityAgentIds: [] };
+    }
+    
+    // The first mentioned agent is the priority
+    const priorityAgentId = mentionedAgentIds.length > 0 ? mentionedAgentIds[0] : null;
+    
+    // Other mentioned agents are non-priority
+    const nonPriorityAgentIds = mentionedAgentIds.slice(1);
+    
+    return { priorityAgentId, nonPriorityAgentIds };
   };
 
   // If not authenticated, show the Login component
@@ -875,7 +859,7 @@ function App() {
           </div>
         </header>
 
-        <main className={`chat-container ${hasMessages ? 'has-messages' : 'no-messages'}`}>
+        <main className={`chat-container ${hasMessages ? 'has-messages' : 'no-messages'}`} ref={chatContainerRef}>
           <div className="messages-container">
             {messages.length === 0 ? (
               <div className="welcome-message">
@@ -1039,29 +1023,17 @@ function App() {
       </button>
 
       {/* Personas Bin */}
-      <div 
-        ref={personasBinRef}
-        className={`personas-bin ${showPersonasBin ? 'show' : ''}`}
-      >
-        <div className="personas-bin-header">
-          <h3>Select Personas</h3>
-          <button 
-            className="close-bin" 
-            onClick={togglePersonasBin}
-            aria-label="Close personas selection"
-          >
-            ×
-          </button>
-        </div>
-        <div className="categories-container">
-          {Object.keys(PERSONA_CATEGORIES).map(categoryId => {
-            const category = PERSONA_CATEGORIES[categoryId];
-            return (
-              <div key={categoryId} className="category-section">
+      {showPersonasBin && (
+        <div 
+          ref={personasBinRef}
+          className="personas-bin"
+        >
+          <div className="categories-container">
+            {Object.entries(PERSONA_CATEGORIES).map(([categoryId, category]) => (
+              <div className="category-section" key={categoryId}>
                 <button
                   className={`category-button ${expandedCategories.includes(categoryId) ? 'expanded' : ''}`}
                   onClick={() => toggleCategory(categoryId)}
-                  aria-expanded={expandedCategories.includes(categoryId)}
                 >
                   <span className="category-name">{category.name}</span>
                   <span className="category-arrow"></span>
@@ -1072,23 +1044,26 @@ function App() {
                       key={persona.id}
                       className={`persona-button ${selectedPersonas.includes(persona.id) ? 'selected' : ''}`}
                       onClick={() => togglePersona(persona.id)}
-                      aria-pressed={selectedPersonas.includes(persona.id)}
                     >
-                      <div className="persona-initial">
-                        {persona.name.charAt(0)}
-                      </div>
                       <div className="persona-info">
                         <span className="persona-name">{persona.name}</span>
                         <span className="persona-description">{persona.description}</span>
+                      </div>
+                      <div className="persona-status">
+                        {selectedPersonas.includes(persona.id) ? (
+                          <span className="check-icon">✓</span>
+                        ) : (
+                          <span className="plus-icon">+</span>
+                        )}
                       </div>
                     </button>
                   ))}
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Mention Dropdown */}
       {showMentionDropdown && (
@@ -1105,7 +1080,7 @@ function App() {
               <div 
                 key={personaId} 
                 className="mention-item"
-                onClick={() => selectMention(personaId)}
+                onClick={() => handleMentionSelect(personaId)}
               >
                 <div className="mention-initial">
                   {getPersonaName(personaId).charAt(0)}
