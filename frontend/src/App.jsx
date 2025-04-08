@@ -82,6 +82,20 @@ const AGENT_PROMPTS = {
   scorpio: "You are Scorpio, a deep analytical investigator who sees beneath surfaces. You have psychological insight and uncover hidden truths. Your responses should be penetrating, mysterious, and reveal underlying motivations and dynamics that others might miss."
 };
 
+function generateFallbackResponse(question, personaIds) {
+  // This function generates a basic client-side response if the API completely fails
+  return personaIds.map(personaId => {
+    const prompt = AGENT_PROMPTS[personaId] || "You are a helpful assistant";
+    const personaName = personaId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    
+    return {
+      agent: personaId,
+      response: `[Note: This is a fallback response generated client-side due to API issues]\n\nAs ${personaName}, I would respond to your question, but the backend service appears to be unavailable right now. Please try again in a few moments as the server might be starting up or under maintenance.`,
+      model: "fallback"
+    };
+  });
+}
+
 function App() {
   const [selectedPersonas, setSelectedPersonas] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -335,6 +349,16 @@ function App() {
       };
       setMessages(prev => [...prev, userMessage]);
       
+      // Add a loading message right after the user message
+      const loadingMessage = {
+        type: 'system',
+        content: 'The AI personas are thinking...',
+        displayedContent: 'The AI personas are thinking...',
+        timestamp: new Date().toISOString(),
+        isLoading: true
+      };
+      setMessages(prev => [...prev, loadingMessage]);
+      
       // Clear input immediately after submitting
       setInputText('');
 
@@ -366,48 +390,122 @@ function App() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('Received data:', data); // Log the response data
+      // Capture the raw response text before parsing
+      const responseText = await response.text();
+      console.log('Raw response text:', responseText);
+      
+      // Try to parse the JSON response safely
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('Parsed data:', data);
+      } catch (jsonError) {
+        console.error('JSON parsing error:', jsonError);
+        throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
+      }
+      
+      // Temporary debug panel information
+      setDebugInfo({
+        responseStatus: response.status,
+        responseText: responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''),
+        parsedData: data
+      });
+      
+      // Enable debug mode automatically if there's an issue
+      if (!debugMode) {
+        setDebugMode(true);
+      }
       
       // Map responses to message objects
-      // Handle different API response formats
+      // Handle different API response formats with comprehensive safeguards
       let responseArray = [];
       
       if (!data) {
         throw new Error("Received empty response from server");
       }
       
-      // For authenticated API response
+      console.log('Response data structure:', Object.keys(data));
+      
+      // Try different potential response formats
       if (data.answers && Array.isArray(data.answers)) {
+        console.log('Using data.answers format');
         responseArray = data.answers;
       } 
-      // For public API response
       else if (data.responses && Array.isArray(data.responses)) {
+        console.log('Using data.responses format');
         responseArray = data.responses;
         
-        // If there are additional rounds, flatten them 
         if (data.additional_rounds && Array.isArray(data.additional_rounds)) {
+          console.log('Adding additional_rounds');
           // Flatten the additional rounds
-          const additionalResponses = data.additional_rounds.flat();
-          responseArray = [...responseArray, ...additionalResponses];
+          try {
+            const additionalResponses = data.additional_rounds.flat();
+            responseArray = [...responseArray, ...additionalResponses];
+          } catch (flatError) {
+            console.error('Error flattening additional_rounds:', flatError);
+            // Just try to use the initial responses
+          }
         }
       }
-      // If we have an array directly (shouldn't happen but just in case)
       else if (Array.isArray(data)) {
+        console.log('Using direct array format');
         responseArray = data;
       }
-      // Fallback if no response structure matches
+      // Check for other potential response formats
+      else if (data.result && Array.isArray(data.result)) {
+        console.log('Using data.result format');
+        responseArray = data.result;
+      }
+      else if (data.data && Array.isArray(data.data)) {
+        console.log('Using data.data format');
+        responseArray = data.data;
+      }
+      // If we have a single response object, wrap it in an array
+      else if (data.response || data.answer) {
+        console.log('Using single response/answer format');
+        const singleResponse = data.response || data.answer;
+        if (typeof singleResponse === 'object') {
+          responseArray = [singleResponse];
+        }
+      }
+      // Last resort - try to extract any array from the response
       else {
         console.error("Unexpected API response format:", data);
-        throw new Error("Unexpected response format from API");
+        // Look for any array in the response
+        for (const key in data) {
+          if (Array.isArray(data[key])) {
+            console.log(`Found array in data.${key}`);
+            responseArray = data[key];
+            break;
+          }
+        }
+        
+        // If still no array found, create a basic error message
+        if (responseArray.length === 0) {
+          throw new Error("Could not find valid response data in the API response");
+        }
       }
       
       if (responseArray.length === 0) {
         throw new Error("Received empty response array from server");
       }
       
-      // Now use the combined responseArray
-      const personaResponses = responseArray.map(answer => ({
+      console.log('Final responseArray:', responseArray);
+      
+      // Make sure the array items have the required properties
+      const sanitizedArray = responseArray.map(item => {
+        // Create a sanitized version with default values if properties are missing
+        return {
+          agent: item.agent || item.personaId || 'system',
+          response: item.response || item.content || item.message || JSON.stringify(item),
+          model: item.model || 'unknown'
+        };
+      });
+      
+      console.log('Sanitized array:', sanitizedArray);
+      
+      // Now use the sanitized array
+      const personaResponses = sanitizedArray.map(answer => ({
         type: answer.agent === 'system' ? 'system' : 'persona',
         personaId: answer.agent,
         content: answer.response,
@@ -417,6 +515,19 @@ function App() {
         fullContent: answer.response // Store the full content
       }));
       
+      // Update debug info with the processed arrays
+      setDebugInfo({
+        responseStatus: response.status,
+        responseText: responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''),
+        parsedData: data,
+        responseArray: responseArray,
+        sanitizedArray: sanitizedArray,
+        personaResponses: personaResponses
+      });
+
+      // Remove the loading message before adding the responses
+      setMessages(prev => prev.filter(msg => !msg.isLoading));
+
       // Add responses one by one with animation
       setAnimatingText(true);
       
@@ -481,12 +592,6 @@ function App() {
         }
       }
       
-      setDebugInfo({
-        responseStatus: response.status,
-        responseData: data,
-        responseArray: responseArray
-      });
-      
       setAnimatingText(false);
     } catch (error) {
       console.error('Error in handleSubmit:', error);
@@ -498,6 +603,35 @@ function App() {
           error.message.includes('Failed to fetch') || 
           error.message.includes('Network request failed')) {
         errorMessage = 'Unable to connect to the backend server. This may be because the backend service is still spinning up (this can take 1-2 minutes on first load) or there is a network issue. Please wait a moment and try again.';
+        
+        // Generate fallback client-side responses if there's a connection issue
+        const fallbackResponses = generateFallbackResponse(inputText, selectedPersonas);
+        console.log('Using fallback responses:', fallbackResponses);
+        
+        // Add system message about fallback mode
+        setMessages(prev => [...prev, {
+          type: 'system',
+          content: `Note: Using fallback mode due to connection issues. These responses are generated client-side and are limited.`,
+          displayedContent: `Note: Using fallback mode due to connection issues. These responses are generated client-side and are limited.`,
+          timestamp: new Date().toISOString()
+        }]);
+        
+        // Process and display the fallback responses
+        const personaResponses = fallbackResponses.map(response => ({
+          type: 'persona',
+          personaId: response.agent,
+          content: response.response,
+          displayedContent: response.response,
+          timestamp: new Date().toISOString(),
+          conversationId: conversationId,
+          isAnimating: false
+        }));
+        
+        // Add the fallback responses to the messages
+        setMessages(prev => [...prev, ...personaResponses]);
+        setAnimatingText(false);
+        setIsLoading(false);
+        return; // Exit early since we've handled it with fallbacks
       } else if (error.message && error.message.includes('Unexpected response format')) {
         errorMessage = 'Received an unexpected response format from the server. This might be due to API changes or backend issues.';
       }
@@ -653,13 +787,18 @@ function App() {
                       )}
                       {message.type === 'system' && (
                         <div className="message-header">
-                          <div className="system-indicator">i</div>
-                          <span className="system-label">System</span>
+                          <div className={`system-indicator ${message.isLoading ? 'loading-indicator' : ''}`}>
+                            {message.isLoading ? '⟳' : 'i'}
+                          </div>
+                          <span className="system-label">
+                            {message.isLoading ? 'Loading' : 'System'}
+                          </span>
                         </div>
                       )}
-                      <div className="message-content">
+                      <div className={`message-content ${message.isLoading ? 'loading-message' : ''}`}>
                         {message.displayedContent !== undefined ? message.displayedContent : message.content}
                         {message.isAnimating && <span className="cursor-blink">|</span>}
+                        {message.isLoading && <span className="loading-dots"></span>}
                       </div>
                     </div>
                   );
@@ -836,12 +975,24 @@ function App() {
             <strong>Response Status:</strong> {debugInfo.responseStatus}
           </div>
           <div>
-            <strong>Response Data:</strong>
-            <pre>{JSON.stringify(debugInfo.responseData, null, 2)}</pre>
+            <strong>Response Text:</strong>
+            <pre>{debugInfo.responseText}</pre>
+          </div>
+          <div>
+            <strong>Parsed Data:</strong>
+            <pre>{JSON.stringify(debugInfo.parsedData, null, 2)}</pre>
           </div>
           <div>
             <strong>Processed Response Array:</strong>
             <pre>{JSON.stringify(debugInfo.responseArray, null, 2)}</pre>
+          </div>
+          <div>
+            <strong>Sanitized Array:</strong>
+            <pre>{JSON.stringify(debugInfo.sanitizedArray, null, 2)}</pre>
+          </div>
+          <div>
+            <strong>Persona Responses:</strong>
+            <pre>{JSON.stringify(debugInfo.personaResponses, null, 2)}</pre>
           </div>
           <button onClick={() => setDebugInfo(null)}>Clear</button>
         </div>

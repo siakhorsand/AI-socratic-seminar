@@ -104,6 +104,7 @@ export const apiCall = async (endpoint, method = 'GET', data = null) => {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'application/json'
     },
   };
   
@@ -120,65 +121,53 @@ export const apiCall = async (endpoint, method = 'GET', data = null) => {
   }
   
   try {
-    console.log(`Making API request to ${url}`, { method, data });
+    console.log(`Making API request to ${url}`, { 
+      method, 
+      headers: options.headers,
+      data 
+    });
     
-    const response = await fetch(url, options);
+    // Add timeout to fetch requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
     
     // Log response info for debugging
     console.log(`Received response from ${url}:`, {
       status: response.status,
       ok: response.ok,
-      statusText: response.statusText
+      statusText: response.statusText,
+      headers: Object.fromEntries([...response.headers.entries()])
     });
-    
-    // For JSON parsing errors, capture the response text and log it
-    if (response.ok) {
-      try {
-        // Clone the response so we can both read the text and parse JSON
-        const clonedResponse = response.clone();
-        const textResponse = await clonedResponse.text();
-        
-        // Check if the text is empty
-        if (!textResponse || textResponse.trim() === '') {
-          console.error(`Empty response from ${url}`);
-          throw new Error('Received empty response from server');
-        }
-        
-        // Check if it's valid JSON by parsing it
-        try {
-          JSON.parse(textResponse);
-        } catch (e) {
-          console.error(`Invalid JSON response from ${url}:`, textResponse);
-          throw new Error('Invalid JSON response from server');
-        }
-      } catch (jsonError) {
-        console.error('JSON parsing test failed:', jsonError);
-        // Continue with the original response - the actual parsing will happen in the component
-      }
-    }
     
     return response;
   } catch (error) {
     console.error(`API call error to ${url}:`, error);
     
     // Add more context to the error
-    if (isGitHubPages) {
+    let errorMessage = '';
+    
+    if (error.name === 'AbortError') {
+      errorMessage = 'Request timed out after 30 seconds. The server might be overloaded or starting up.';
+    } else if (isGitHubPages) {
       // Special handling for GitHub Pages users
-      const newError = new Error(
-        `Failed to connect to backend at ${baseUrl}. ` +
+      errorMessage = `Failed to connect to backend at ${baseUrl}. ` +
         'If this is the first request, the backend might be starting up (can take 30-60 seconds). ' +
-        'Please wait a moment and try again.'
-      );
-      newError.originalError = error;
-      throw newError;
+        'Please wait a moment and try again.';
     } else {
       // For local development
-      const newError = new Error(
-        `Failed to connect to backend at ${baseUrl}. ` +
-        'Please make sure your backend server is running.'
-      );
-      newError.originalError = error;
-      throw newError;
+      errorMessage = `Failed to connect to backend at ${baseUrl}. ` +
+        'Please make sure your backend server is running.';
     }
+    
+    const newError = new Error(errorMessage);
+    newError.originalError = error;
+    throw newError;
   }
 }; 

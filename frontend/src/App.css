@@ -1394,6 +1394,70 @@ textarea.input-control {
   z-index: 9999;
 }
 
+/* Loading message styling */
+.loading-message {
+  display: flex;
+  align-items: center;
+}
+
+.loading-dots {
+  margin-left: 8px;
+  position: relative;
+  width: 24px;
+  height: 16px;
+}
+
+.loading-dots::after {
+  content: "...";
+  font-size: 20px;
+  color: var(--primary-light);
+  animation: dots 1.5s infinite;
+  position: absolute;
+  top: -5px;
+}
+
+@keyframes dots {
+  0%, 20% {
+    color: rgba(255, 255, 255, 0);
+    text-shadow: 0.25em 0 0 rgba(255, 255, 255, 0), 0.5em 0 0 rgba(255, 255, 255, 0);
+  }
+  40% {
+    color: white;
+    text-shadow: 0.25em 0 0 rgba(255, 255, 255, 0), 0.5em 0 0 rgba(255, 255, 255, 0);
+  }
+  60% {
+    text-shadow: 0.25em 0 0 white, 0.5em 0 0 rgba(255, 255, 255, 0);
+  }
+  80%, 100% {
+    text-shadow: 0.25em 0 0 white, 0.5em 0 0 white;
+  }
+}
+
+.system-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: none;
+}
+
+.system-message.loading {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.system-indicator:contains('⟳') {
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Updated selector for rotating indicator since :contains is not supported in standard CSS */
+.system-indicator.loading-indicator {
+  animation: spin 2s linear infinite;
+}
+
 /* Remove any CSS related to API key inputs */
 .api-key-container {
   display: none; /* Hide API key container */
