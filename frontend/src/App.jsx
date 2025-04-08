@@ -829,7 +829,7 @@ IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
           <div className="header-top">
             <h1>AI Socratic Seminar</h1>
             <div className="user-info">
-              {user && (
+              {user ? (
                 <>
                   {user.picture && <img src={user.picture} alt={user.name} className="user-avatar" />}
                   <span className="user-name">{user.name}</span>
@@ -837,41 +837,37 @@ IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
                     Sign Out
                   </button>
                 </>
+              ) : (
+                <button className="login-button" onClick={() => setAuthenticated(false)}>
+                  Log In
+                </button>
               )}
             </div>
           </div>
-          <div className="selected-personas">
-            {selectedPersonas.map(personaId => (
-              <div key={personaId} className="selected-persona">
-                <div className="persona-initial">
-                  {getPersonaName(personaId).charAt(0)}
+          {hasMessages && (
+            <div className="selected-personas">
+              {selectedPersonas.map(personaId => (
+                <div key={personaId} className="selected-persona">
+                  <div className="persona-initial">
+                    {getPersonaName(personaId).charAt(0)}
+                  </div>
+                  <span className="selected-persona-name">{getPersonaName(personaId)}</span>
+                  <button 
+                    className="remove-persona" 
+                    onClick={() => togglePersona(personaId)}
+                    aria-label={`Remove ${getPersonaName(personaId)}`}
+                  >
+                    ×
+                  </button>
                 </div>
-                <span className="selected-persona-name">{getPersonaName(personaId)}</span>
-                <button 
-                  className="remove-persona" 
-                  onClick={() => togglePersona(personaId)}
-                  aria-label={`Remove ${getPersonaName(personaId)}`}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </header>
 
         <main className={`chat-container ${hasMessages ? 'has-messages' : 'no-messages'}`} ref={chatContainerRef}>
-          <div className="messages-container">
-            {messages.length === 0 ? (
-              <div className="welcome-message">
-                <h2>Welcome to the AI Socratic Seminar</h2>
-                <p>Select personas from the categories above and ask a question to begin the dialogue</p>
-                {autoDebate && (
-                  <p className="auto-debate-info">
-                    <strong>Debate Mode is active.</strong> After your question, the selected personas will engage in a multi-round discussion with each other.
-                  </p>
-                )}
-              </div>
-            ) : (
+          {hasMessages ? (
+            <div className="messages-container">
               <div className="messages-list">
                 {messages.map((message, index) => {
                   // Determine if this message is being replied to by the next message
@@ -939,8 +935,8 @@ IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
                 })}
                 <div ref={messagesEndRef} />
               </div>
-            )}
-          </div>
+            </div>
+          ) : null}
 
           <div className="input-container">
             <div className="input-options">
@@ -989,10 +985,12 @@ IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
                     handleSubmit(e);
                   }
                 }}
-                placeholder={autoDebate 
-                  ? "Type @ to mention a specific persona..." 
-                  : "Ask a philosophical question..."}
-                disabled={isLoading || animatingText}
+                placeholder={selectedPersonas.length === 0 
+                  ? "Select personas to begin..." 
+                  : autoDebate 
+                    ? "Type @ to mention a specific persona..." 
+                    : "Ask a philosophical question..."}
+                disabled={isLoading || animatingText || selectedPersonas.length === 0}
                 rows="1"
               />
               <button
@@ -1010,7 +1008,7 @@ IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
 
       {/* Floating Button for Personas Bin */}
       <button 
-        className="floating-button"
+        className={`floating-button ${hasMessages ? '' : 'prominent'}`}
         onClick={togglePersonasBin}
         title="Select Personas"
         aria-label="Open personas selection"
