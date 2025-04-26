@@ -12,7 +12,6 @@
     "deploy": "gh-pages -d dist"
   },
   "keywords": [
-    "openai",
     "ai",
     "chatgpt",
     "socratic",

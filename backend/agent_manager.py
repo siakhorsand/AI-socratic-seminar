@@ -8,16 +8,218 @@ import uuid
 from typing import Dict, List, Optional, Any, Union
 import logging
 
-from openai import OpenAI
 from memory import memory_manager
 from agent_config import get_agent_params, get_few_shot_examples
+from huggingface_client import HuggingFaceClient, HuggingFaceError, retry_with_exponential_backoff
+from websocket_manager import manager
 
 logger = logging.getLogger(__name__)
 
 class AgentManager:
-    def __init__(self, client: OpenAI, agent_prompts: Dict[str, str]):
-        self.client = client
+    def __init__(self, huggingface_client: HuggingFaceClient, agent_prompts: Dict[str, str]):
+        self.client = huggingface_client
         self.agent_prompts = agent_prompts
+        self.conversations: Dict[str, List[Dict[str, Any]]] = {}
+        logger.info("AgentManager initialized with enhanced error handling")
+        
+    @retry_with_exponential_backoff()
+    async def get_agent_response(self, agent_id: str, conversation_context: List[Dict[str, Any]], conversation_id: str, **kwargs) -> str:
+        """
+        Get a response from an agent with enhanced error handling, retry logic, and WebSocket updates
+        """
+        message_id = str(uuid.uuid4())
+        try:
+            # Signal that agent is typing
+            await manager.send_agent_typing(conversation_id, agent_id, True)
+            
+            # Build the prompt for the agent
+            system_prompt = self.agent_prompts.get(agent_id, "You are a helpful AI assistant.")
+            messages = [{"role": "system", "content": system_prompt}]
+            messages.extend(conversation_context)
+
+            # Get completion from Hugging Face
+            agent_params = get_agent_params(agent_id)
+            response = await self.client.create_chat_completion(
+                messages=messages,
+                max_tokens=agent_params.get("max_tokens", 500),
+                temperature=agent_params.get("temperature", 0.7),
+                top_p=agent_params.get("top_p", 0.95),
+                **kwargs
+            )
+
+            # Extract the response text
+            response_text = response["choices"][0]["message"]["content"].strip()
+            
+            # Send the complete response through WebSocket
+            await manager.send_agent_response(conversation_id, agent_id, response_text, message_id)
+            
+            # Signal that agent is done typing
+            await manager.send_agent_typing(conversation_id, agent_id, False)
+
+            return response_text
+
+        except HuggingFaceError as e:
+            # Signal that agent is no longer typing and send error
+            await manager.send_agent_typing(conversation_id, agent_id, False)
+            await manager.send_error(conversation_id, agent_id, str(e))
+            
+            logger.error(f"Error getting agent response for {agent_id}",
+                        extra={
+                            "error": str(e),
+                            "agent_id": agent_id,
+                            "error_type": type(e).__name__
+                        })
+            raise
+        except Exception as e:
+            # Signal that agent is no longer typing and send error
+            await manager.send_agent_typing(conversation_id, agent_id, False)
+            await manager.send_error(conversation_id, agent_id, "An unexpected error occurred")
+            
+            logger.error(f"Unexpected error in get_agent_response for {agent_id}: {str(e)}",
+                        extra={
+                            "error": str(e),
+                            "agent_id": agent_id,
+                            "error_type": type(e).__name__
+                        })
+            raise
+
+    async def create_conversation(self, conversation_id: str, question: str, agent_ids: List[str], **kwargs) -> List[Dict[str, Any]]:
+        """
+        Create a new conversation with enhanced error handling and WebSocket updates
+        """
+        try:
+            # Initialize conversation history
+            self.conversations[conversation_id] = []
+            
+            # Add the user's question
+            self.conversations[conversation_id].append({
+                "role": "user",
+                "content": question
+            })
+
+            responses = []
+            for agent_id in agent_ids:
+                try:
+                    response = await self.get_agent_response(
+                        agent_id,
+                        self.conversations[conversation_id],
+                        conversation_id,
+                        **kwargs
+                    )
+                    
+                    agent_message = {
+                        "role": "assistant",
+                        "content": response,
+                        "agent_id": agent_id
+                    }
+                    
+                    self.conversations[conversation_id].append(agent_message)
+                    responses.append(agent_message)
+                
+                except HuggingFaceError as e:
+                    logger.error(f"Error getting response from agent {agent_id}",
+                               extra={
+                                   "error": str(e),
+                                   "conversation_id": conversation_id,
+                                   "agent_id": agent_id
+                               })
+                    # Continue with other agents if one fails
+                    continue
+
+            if not responses:
+                raise HuggingFaceError("Failed to get any valid responses from agents")
+                
+            # Broadcast conversation update to all connected clients
+            await manager.broadcast_conversation_update(conversation_id, responses)
+
+            return responses
+
+        except Exception as e:
+            logger.error(f"Error in create_conversation",
+                        extra={
+                            "error": str(e),
+                            "conversation_id": conversation_id,
+                            "error_type": type(e).__name__
+                        })
+            raise
+
+    async def continue_conversation(self, conversation_id: str, question: Optional[str], agent_ids: List[str], **kwargs) -> List[Dict[str, Any]]:
+        """
+        Continue an existing conversation with enhanced error handling and WebSocket updates
+        """
+        try:
+            if conversation_id not in self.conversations:
+                raise ValueError(f"Conversation {conversation_id} not found")
+
+            if question:
+                self.conversations[conversation_id].append({
+                    "role": "user",
+                    "content": question
+                })
+
+            responses = []
+            for agent_id in agent_ids:
+                try:
+                    response = await self.get_agent_response(
+                        agent_id,
+                        self.conversations[conversation_id],
+                        conversation_id,
+                        **kwargs
+                    )
+                    
+                    agent_message = {
+                        "role": "assistant",
+                        "content": response,
+                        "agent_id": agent_id
+                    }
+                    
+                    self.conversations[conversation_id].append(agent_message)
+                    responses.append(agent_message)
+                
+                except HuggingFaceError as e:
+                    logger.error(f"Error getting response from agent {agent_id}",
+                               extra={
+                                   "error": str(e),
+                                   "conversation_id": conversation_id,
+                                   "agent_id": agent_id
+                               })
+                    # Continue with other agents if one fails
+                    continue
+
+            if not responses:
+                raise HuggingFaceError("Failed to get any valid responses from agents")
+                
+            # Broadcast conversation update to all connected clients
+            await manager.broadcast_conversation_update(conversation_id, responses)
+
+            return responses
+
+        except Exception as e:
+            logger.error(f"Error in continue_conversation",
+                        extra={
+                            "error": str(e),
+                            "conversation_id": conversation_id,
+                            "error_type": type(e).__name__
+                        })
+            raise
+
+    def get_conversation_history(self, conversation_id: str) -> List[Dict[str, Any]]:
+        """
+        Get the conversation history for a given conversation ID
+        """
+        if conversation_id not in self.conversations:
+            raise ValueError(f"Conversation {conversation_id} not found")
+        return self.conversations[conversation_id]
+
+    def delete_conversation(self, conversation_id: str) -> None:
+        """
+        Delete a conversation and its history
+        """
+        if conversation_id in self.conversations:
+            del self.conversations[conversation_id]
+            logger.info(f"Deleted conversation {conversation_id}")
+        else:
+            logger.warning(f"Attempted to delete non-existent conversation {conversation_id}")
         
     async def get_response(self, 
                           agent_id: str, 
@@ -59,13 +261,10 @@ IMPORTANT INSTRUCTIONS FOR GROUP CHAT:
             
             # Get agent-specific parameters
             params = get_agent_params(agent_id)
-            # Always use gpt-3.5-turbo regardless of what's in params
-            model = "gpt-3.5-turbo"
+            model = params.get("model", "meta-llama/Llama-3-8B-Instruct")
             temperature = params.get("temperature", 0.8)
             max_tokens = params.get("max_tokens", 350)  # Reduced from 500 to encourage brevity
-            frequency_penalty = params.get("frequency_penalty", 0.2)  # Increased to discourage repetition
-            presence_penalty = params.get("presence_penalty", 0.2)  # Increased to encourage diversity
-            top_p = params.get("top_p", 1.0)
+            top_p = params.get("top_p", 0.95)
             persona_strength = params.get("persona_strength", 1.0)
             
             # Log agent parameters
@@ -79,6 +278,14 @@ IMPORTANT INSTRUCTIONS FOR GROUP CHAT:
             elif include_context:
                 logger.debug(f"Using memory context for agent {agent_id}")
                 context = memory_manager.get_context(conversation_id, agent_id)
+                
+                # Truncate context if it's too long to prevent token limit issues
+                if len(context) > 4000:  # Approx 1000 tokens
+                    logger.warning(f"Context for {agent_id} is too long ({len(context)} chars). Truncating...")
+                    # Keep the beginning and end of the context, removing the middle
+                    context_start = context[:1500]
+                    context_end = context[-2500:]
+                    context = f"{context_start}\n...\n[Context truncated for brevity]\n...\n{context_end}"
                 
             # Get few-shot examples if available
             few_shot_examples = get_few_shot_examples(agent_id)
@@ -114,34 +321,47 @@ IMPORTANT INSTRUCTIONS FOR GROUP CHAT:
             if context:
                 messages.append({"role": "system", "content": context})
             
-            # Add few-shot examples if available
-            for example in few_shot_examples:
+            # Add few-shot examples if available (limit to 2 examples max to save tokens)
+            for example in few_shot_examples[:2]:
                 messages.append({"role": "user", "content": example["question"]})
                 messages.append({"role": "assistant", "content": example["response"]})
             
             # Add the actual question
             messages.append({"role": "user", "content": question})
             
+            # Estimate total token count and truncate if necessary
+            # Rough estimate: 4 chars ≈ 1 token
+            total_chars = sum(len(msg["content"]) for msg in messages)
+            estimated_tokens = total_chars // 4
+            
+            # If we're approaching the model's token limit, truncate the context
+            if estimated_tokens > 3500:  # Leave room for response
+                logger.warning(f"Total context for {agent_id} is too large ({estimated_tokens} est. tokens). Reducing...")
+                # Find and truncate the context message which is typically the largest
+                for i, msg in enumerate(messages):
+                    if msg["role"] == "system" and len(msg["content"]) > 1000 and i > 0:  # Skip the first system message
+                        content_len = len(msg["content"])
+                        # Keep 30% of the content, prioritizing recent context
+                        keep_chars = min(1500, int(content_len * 0.3))
+                        messages[i]["content"] = f"[Context truncated]...\n{msg['content'][-keep_chars:]}"
+                        logger.info(f"Truncated context message from {content_len} to {len(messages[i]['content'])} chars")
+                        break
+            
             # Log request details
             logger.debug(f"Making request for agent {agent_id} with {len(messages)} messages")
             start_time = time.time()
             
             # Make the API call
-            response = await asyncio.to_thread(
-                lambda: self.client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    frequency_penalty=frequency_penalty,
-                    presence_penalty=presence_penalty,
-                    top_p=top_p
-                )
+            response = await self.client.create_chat_completion(
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p
             )
             
             # Extract and process the response
             duration = time.time() - start_time
-            answer = response.choices[0].message.content
+            answer = response["choices"][0]["message"]["content"]
             
             logger.info(f"Received response from {agent_id} in {duration:.2f}s ({len(answer)} chars)")
             logger.debug(f"Response preview: {answer[:70]}...")
@@ -223,8 +443,8 @@ IMPORTANT INSTRUCTIONS FOR GROUP CHAT:
                 debate_style = params.get("debate_style", "standard")
                 reasoning_framework = params.get("reasoning_framework", "general")
                 
-                # Always use gpt-3.5-turbo model
-                model = "gpt-3.5-turbo"
+                # Get model from params, default to Llama-3
+                model = params.get("model", "meta-llama/Llama-3-8B-Instruct")
                 
                 agent_details = {
                     "id": agent_id,

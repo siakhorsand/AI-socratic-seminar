@@ -1,3 +1,117 @@
+/* Add Tailwind directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Animations */
+@keyframes typing {
+  from { width: 0 }
+  to { width: 100% }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.typing-animation {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  animation: typing 1.5s steps(40, end);
+}
+
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 16px;
+  background-color: currentColor;
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: blink 1s step-start infinite;
+}
+
+.animation-delay-200 {
+  animation-delay: 0.2s;
+}
+
+.animation-delay-400 {
+  animation-delay: 0.4s;
+}
+
+/* Dark mode transitions */
+html {
+  transition: background-color 0.3s ease;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+/* Gradients */
+.gradient-text {
+  @apply bg-clip-text text-transparent;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-700 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-600;
+}
+
+/* Transitions for persona bin */
+.slide-in {
+  animation: slideIn 0.3s forwards;
+}
+
+.slide-out {
+  animation: slideOut 0.3s forwards;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+/* Rounds chooser animation */
+.rounds-chooser-enter {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.rounds-chooser-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 200ms, transform 200ms;
+}
+
+.rounds-chooser-exit {
+  opacity: 1;
+}
+
+.rounds-chooser-exit-active {
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 200ms, transform 200ms;
+}
+
 /* Root variables with Apple-inspired design system */
 :root {
   --primary: #0a84ff;

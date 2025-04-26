@@ -25,15 +25,18 @@ export default function InputBar({ onSubmit, isLoading }) {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="sticky bottom-0 w-full py-4 z-10"
+      className="fixed bottom-0 left-0 right-0 z-20 pointer-events-none"
     >
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="max-w-4xl mx-auto px-4 pb-4">
         <form 
           onSubmit={handleSubmit}
-          className="relative flex items-center w-full backdrop-blur-lg bg-dark-100/60 border border-white/10 rounded-2xl shadow-glass overflow-hidden"
+          className="relative flex items-center w-full pointer-events-auto"
         >
-          {/* Glow effect at the border */}
-          <div className="absolute inset-0 bg-gradient-to-r from-neon-blue/10 to-neon-purple/10 opacity-50" />
+          {/* Glassy background effect */}
+          <div className="absolute inset-0 rounded-2xl backdrop-blur-xl bg-gradient-to-b from-black/30 via-black/20 to-black/30 border border-white/10 shadow-lg" />
+          
+          {/* Subtle glow effect */}
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-neon-blue/5 to-neon-purple/5 opacity-50" />
           
           <input
             ref={inputRef}
@@ -42,10 +45,10 @@ export default function InputBar({ onSubmit, isLoading }) {
             onChange={(e) => setMessage(e.target.value)}
             disabled={isLoading}
             placeholder="Ask a question..."
-            className="flex-1 bg-transparent border-0 focus:ring-0 text-white/90 placeholder-white/40 py-4 px-5 text-base"
+            className="relative flex-1 bg-transparent border-0 focus:ring-0 text-white/90 placeholder-white/40 py-4 px-5 text-base"
           />
           
-          <div className="px-3">
+          <div className="relative px-3 flex items-center h-full">
             <AnimatePresence mode="wait">
               {isLoading ? (
                 <motion.div
@@ -66,15 +69,15 @@ export default function InputBar({ onSubmit, isLoading }) {
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: message.trim() ? 1 : 0.5, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
-                  whileHover={{ scale: 1.05 }}
+                  whileHover={{ scale: 1.05, y: -1 }}
                   whileTap={{ scale: 0.95 }}
-                  className={`rounded-full p-2 ${
+                  className={`flex items-center justify-center h-10 w-10 rounded-xl transition-all duration-300 ease-out ${
                     message.trim() 
-                      ? 'bg-gradient-to-r from-neon-blue to-neon-purple hover:shadow-glow-blue' 
-                      : 'bg-white/10'
-                  } transition-all duration-300 ease-in-out`}
+                      ? 'bg-gradient-to-br from-white/10 to-white/5 hover:from-white/15 hover:to-white/10 shadow-sm' 
+                      : 'bg-white/5'
+                  }`}
                 >
-                  <Send size={18} className="text-white" />
+                  <Send size={18} className={`${message.trim() ? 'text-white' : 'text-white/40'} transition-colors duration-300`} />
                 </motion.button>
               )}
             </AnimatePresence>

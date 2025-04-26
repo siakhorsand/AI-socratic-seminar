@@ -2,17 +2,20 @@ import os
 import logging
 import json
 import time
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 from pathlib import Path
-from openai import OpenAI
 from dotenv import load_dotenv
 import random
 import asyncio
 import uuid
 from datetime import datetime, timedelta
+from websocket_manager import manager
+from starlette.websockets import WebSocketState
+from huggingface_client import HuggingFaceClient, HuggingFaceError
 
 # Configure logging
 logging.basicConfig(
@@ -23,12 +26,6 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
-logger.info("Checking OpenAI API key...")
-if not api_key:
-    logger.error("OPENAI_API_KEY not found in environment variables!")
-    raise ValueError("OPENAI_API_KEY not found in environment variables")
-logger.info(f"OpenAI API key loaded successfully (starts with: {api_key[:8]}...)")
 
 # Import enhanced agent management
 from agent_manager import AgentManager
@@ -71,15 +68,39 @@ async def rate_limit_middleware(request: Request, call_next):
     ip = request.client.host
     
     # Rate limit only API endpoints
-    if "/seminar" in request.url.path:
+    if "/seminar" in request.url.path or "/continue" in request.url.path:
         if rate_limiter.is_rate_limited(ip):
-            return HTTPException(
+            raise HTTPException(
                 status_code=429,
                 detail="Rate limit exceeded. Please try again later."
             )
     
     response = await call_next(request)
     return response
+
+# Request models
+class SeminarRequest(BaseModel):
+    question: str
+    agent_ids: List[str]
+    conversation_id: Optional[str] = None
+    auto_conversation: Optional[bool] = False
+    max_rounds: Optional[int] = 3
+    direct_mention: Optional[str] = None
+
+class ContinueRequest(BaseModel):
+    conversation_id: str
+    question: Optional[str] = None
+    agent_ids: List[str]
+
+class AgentConfigRequest(BaseModel):
+    agent_id: str
+    parameters: Dict[str, Any]
+
+# Added ChatRequest model
+class ChatRequest(BaseModel):
+    messages: List[Dict[str, str]]
+    max_tokens: Optional[int] = 500
+    temperature: Optional[float] = 0.7
 
 # Configure CORS - add your deployed frontend URL to allow_origins when you deploy
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -120,38 +141,9 @@ app.add_middleware(
 )
 logger.info(f"CORS middleware configured with origins: {allow_origins}")
 
-# Initialize OpenAI client
-try:
-    client = OpenAI(api_key=api_key)
-    logger.info("OpenAI client initialized successfully")
-    # Test the client
-    test_response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": "test"}],
-        max_tokens=5
-    )
-    logger.info("OpenAI API test successful")
-except Exception as e:
-    logger.error(f"Error initializing OpenAI client: {str(e)}")
-    logger.error(f"Full error details: {repr(e)}")
-    raise
-
-class SeminarRequest(BaseModel):
-    question: str
-    agent_ids: List[str]
-    conversation_id: Optional[str] = None
-    auto_conversation: Optional[bool] = False
-    max_rounds: Optional[int] = 3
-    direct_mention: Optional[str] = None
-
-class ContinueRequest(BaseModel):
-    conversation_id: str
-    question: Optional[str] = None
-    agent_ids: List[str]
-
-class AgentConfigRequest(BaseModel):
-    agent_id: str
-    parameters: Dict[str, Any]
+# Initialize clients and managers - will be set in startup
+huggingface_client: Optional[HuggingFaceClient] = None
+agent_manager: Optional[AgentManager] = None
 
 # Load agent prompts from different archetype files
 def load_prompts():
@@ -174,16 +166,59 @@ def load_prompts():
                         if prompt_text.endswith("####"):
                             prompt_text = prompt_text[:-4].strip()
                         prompts[agent_name] = prompt_text
+                    else:
+                        logger.warning(f"No 'completion' field found in first line of {prompt_file}")
+        except json.JSONDecodeError:
+            logger.error(f"Error decoding JSON from first line of {prompt_file}")
         except Exception as e:
-            logger.error(f"Error loading prompt for {agent_name}: {str(e)}")
+            logger.error(f"Error loading prompt for {agent_name} from {prompt_file}: {str(e)}")
     
     logger.info(f"Loaded prompts for agents: {list(prompts.keys())}")
     return prompts
 
 AGENT_PROMPTS = load_prompts()
 
-# Initialize our enhanced agent manager
-agent_manager = AgentManager(client, AGENT_PROMPTS)
+# Consolidated startup event handler
+@app.on_event("startup")
+async def initialize_services():
+    """Initialize services like the Hugging Face client and Agent Manager on startup."""
+    global huggingface_client, agent_manager
+    try:
+        logger.info("Initializing Hugging Face client...")
+        hf_api_key = os.getenv("HUGGINGFACE_API_KEY")
+        if not hf_api_key:
+            logger.error("HUGGINGFACE_API_KEY environment variable is not set")
+            raise ValueError("HUGGINGFACE_API_KEY environment variable is not set")
+
+        huggingface_client = HuggingFaceClient(api_key=hf_api_key)
+        logger.info("Hugging Face client created. Testing connection...")
+
+        # Test the connection asynchronously
+        await huggingface_client.create_chat_completion(
+            messages=[{"role": "user", "content": "Connection test"}],
+            max_tokens=5
+        )
+        logger.info("Successfully connected to Hugging Face API")
+
+    except Exception as e:
+        logger.critical(f"Failed to initialize Hugging Face client: {str(e)}", exc_info=True)
+        # Depending on severity, you might want to prevent the app from starting fully
+        # For now, we log critical and agent_manager will remain None
+        huggingface_client = None # Ensure it's None if init failed
+
+    if huggingface_client:
+        try:
+            logger.info("Initializing Agent Manager...")
+            agent_manager = AgentManager(huggingface_client, AGENT_PROMPTS)
+            logger.info("Agent Manager initialized successfully")
+        except Exception as e:
+            logger.critical(f"Failed to initialize Agent Manager: {str(e)}", exc_info=True)
+            agent_manager = None # Ensure it's None if init failed
+    else:
+        logger.critical("Agent Manager cannot be initialized because Hugging Face client failed to initialize.")
+
+    # Start heartbeat task regardless of client/manager status
+    asyncio.create_task(manager.send_heartbeat())
 
 # Authentication endpoints
 @app.post("/api/auth/google", response_model=TokenResponse)
@@ -223,9 +258,20 @@ async def get_user(current_user: TokenData = Depends(get_current_user)):
         picture=current_user.picture
     )
 
-# Seminar endpoints - require authentication
+# Dependency to check if agent_manager is initialized
+async def get_agent_manager():
+    if agent_manager is None:
+        logger.error("Agent Manager is not initialized.")
+        raise HTTPException(status_code=503, detail="AI service is currently unavailable. Please try again later.")
+    return agent_manager
+
+# Seminar endpoints - require authentication and initialized agent_manager
 @app.post("/seminar")
-async def create_seminar(request: SeminarRequest, current_user: TokenData = Depends(get_current_user)):
+async def create_seminar(
+    request: SeminarRequest,
+    current_user: TokenData = Depends(get_current_user),
+    am: AgentManager = Depends(get_agent_manager)
+):
     try:
         logger.info(f"Processing seminar request with input: {request.question[:50]}...")
         
@@ -245,7 +291,7 @@ async def create_seminar(request: SeminarRequest, current_user: TokenData = Depe
             logger.info(f"Direct mention detected for agent: {request.direct_mention}")
         
         # Get first round of responses from all agents
-        initial_responses = await agent_manager.get_multiple_responses(
+        initial_responses = await am.get_multiple_responses(
             agent_ids, 
             request.question,
             conversation_id
@@ -327,7 +373,7 @@ async def create_seminar(request: SeminarRequest, current_user: TokenData = Depe
                             
                             # Get response for this agent
                             logger.debug(f"Getting response for agent {agent_id} in round {round_num + 1}")
-                            response = await agent_manager.get_response(
+                            response = await am.get_response(
                                 agent_id,
                                 continue_prompt,
                                 conversation_id,
@@ -372,8 +418,17 @@ async def create_seminar(request: SeminarRequest, current_user: TokenData = Depe
             raise HTTPException(status_code=500, detail="Failed to get any valid responses")
             
     except Exception as e:
-        logger.error(f"Error in create_seminar: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Unexpected error in create_seminar: {str(e)}",
+                    extra={"error_type": type(e).__name__,
+                          "conversation_id": request.conversation_id})
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": True,
+                "message": "An unexpected error occurred. Please try again later.",
+                "conversation_id": request.conversation_id
+            }
+        )
 
 # Helper function to build conversation context for an agent
 def build_agent_context(conversation_context, agent_id):
@@ -381,15 +436,17 @@ def build_agent_context(conversation_context, agent_id):
     formatted_context = "Previous conversation:\n\n"
     
     for message in conversation_context:
-        if message["role"] == "user":
-            formatted_context += f"User: {message['content']}\n\n"
-        else:
-            formatted_context += f"{message['content']}\n\n"
+        role = message.get("agent", message.get("role", "unknown"))
+        content = message.get("content", "")
+        formatted_context += f"{role.title()}: {content}\n\n"
     
     return formatted_context
 
 @app.post("/continue")
-async def continue_conversation(request: ContinueRequest):
+async def continue_conversation(
+    request: ContinueRequest,
+    am: AgentManager = Depends(get_agent_manager)
+):
     try:
         logger.info(f"Processing continue request for conversation: {request.conversation_id}")
         
@@ -399,7 +456,7 @@ async def continue_conversation(request: ContinueRequest):
             question = "Please continue the discussion, building on the previous exchanges."
             
         # Get responses from agents
-        responses = await agent_manager.get_multiple_responses(
+        responses = await am.get_multiple_responses(
             request.agent_ids,
             question,
             request.conversation_id
@@ -415,12 +472,12 @@ async def continue_conversation(request: ContinueRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/agents", response_model=List[Dict[str, Any]])
-async def get_available_agents():
+async def get_available_agents(am: AgentManager = Depends(get_agent_manager)):
     """
     Returns details about all available agents
     """
     # Get a list of all available agents from agent_manager
-    agents = agent_manager.get_available_agents()
+    agents = am.get_available_agents()
     
     # Group agents by category
     categorized_agents = {
@@ -509,7 +566,10 @@ async def delete_conversation(conversation_id: str):
 
 # Anonymous seminar endpoint (no authentication required)
 @app.post("/public/seminar")
-async def create_public_seminar(request: SeminarRequest):
+async def create_public_seminar(
+    request: SeminarRequest,
+    am: AgentManager = Depends(get_agent_manager)
+):
     try:
         logger.info(f"Processing public seminar request with input: {request.question[:50]}...")
         
@@ -529,7 +589,7 @@ async def create_public_seminar(request: SeminarRequest):
             logger.info(f"Direct mention detected for agent: {request.direct_mention}")
         
         # Get first round of responses from all agents
-        initial_responses = await agent_manager.get_multiple_responses(
+        initial_responses = await am.get_multiple_responses(
             agent_ids, 
             request.question, 
             conversation_id
@@ -571,7 +631,7 @@ async def create_public_seminar(request: SeminarRequest):
                     """
                     
                     # Get the response from the agent
-                    response = await agent_manager.get_response(
+                    response = await am.get_response(
                         agent_id,
                         meta_prompt,
                         conversation_id,
@@ -609,14 +669,17 @@ async def create_public_seminar(request: SeminarRequest):
 
 # Anonymous continue conversation endpoint
 @app.post("/public/continue")
-async def continue_public_conversation(request: ContinueRequest):
+async def continue_public_conversation(
+    request: ContinueRequest,
+    am: AgentManager = Depends(get_agent_manager)
+):
     try:
         logger.info(f"Continuing public conversation {request.conversation_id}")
         
         # Get responses from all agents
         if request.question:
             # If a new question is provided
-            responses = await agent_manager.get_multiple_responses(
+            responses = await am.get_multiple_responses(
                 request.agent_ids,
                 request.question,
                 request.conversation_id
@@ -643,7 +706,7 @@ async def continue_public_conversation(request: ContinueRequest):
                     detail="No previous user message found"
                 )
             
-            responses = await agent_manager.get_multiple_responses(
+            responses = await am.get_multiple_responses(
                 request.agent_ids,
                 last_user_message,
                 request.conversation_id
@@ -663,15 +726,96 @@ async def continue_public_conversation(request: ContinueRequest):
 
 # Anonymous available agents endpoint
 @app.get("/public/agents")
-async def get_public_available_agents():
+async def get_public_available_agents(am: AgentManager = Depends(get_agent_manager)):
     try:
-        agents = agent_manager.get_available_agents()
+        agents = am.get_available_agents()
         return {"agents": agents}
     except Exception as e:
         logger.error(f"Error getting available agents: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error getting available agents: {str(e)}"
+        )
+
+# Add generic HuggingFace exception handler (optional, can be handled within endpoints too)
+@app.exception_handler(HuggingFaceError)
+async def huggingface_exception_handler(request: Request, exc: HuggingFaceError):
+    """Global exception handler for HuggingFace-related errors"""
+    logger.error(f"Global HuggingFaceError Handler caught: {exc}", exc_info=True)
+    if huggingface_client:
+         error_response = huggingface_client.get_error_response(exc)
+    else:
+         # Fallback if client wasn't even initialized
+         error_response = {"error": True, "message": "AI Service Error", "status_code": 503}
+
+    status_code = getattr(exc, 'status_code', 500)
+    return JSONResponse(
+        status_code=status_code,
+        content=error_response
+    )
+
+# Simple debug endpoint to check if server is working
+@app.get("/debug")
+async def debug_endpoint():
+    """Simple endpoint to check if the server is working"""
+    global huggingface_client, agent_manager
+    hf_status = "Initialized" if huggingface_client else "Failed"
+    am_status = "Initialized" if agent_manager else "Failed"
+    return {
+        "status": "ok",
+        "message": "Server is running",
+        "huggingface_client_status": hf_status,
+        "agent_manager_status": am_status,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+# WebSocket endpoint for real-time updates
+@app.websocket("/ws/{conversation_id}")
+async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
+    """WebSocket endpoint for real-time conversation updates"""
+    logger.info(f"WebSocket connection request received for conversation {conversation_id}")
+    await manager.connect(websocket, conversation_id)
+    try:
+        while True:
+            # Keep the connection alive
+            data = await websocket.receive_text() # Use receive_text for flexibility, parse JSON manually
+            logger.debug(f"Received WebSocket message: {data}")
+            
+            # Handle different message types from client
+            if data.get("type") == "ping":
+                logger.info(f"Sending pong response to conversation {conversation_id}")
+                await websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
+            
+            # You can handle other client-to-server messages here
+            
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket client disconnected from conversation {conversation_id}")
+        await manager.disconnect(websocket, conversation_id)
+    except Exception as e:
+        logger.error(f"Error in WebSocket connection: {str(e)}")
+        if websocket.client_state == WebSocketState.CONNECTED:
+            await websocket.close(code=1011)  # Internal server error
+        await manager.disconnect(websocket, conversation_id)
+
+# Update the chat endpoint to use Hugging Face and Agent Manager dependency
+@app.post("/chat")
+async def chat(request: ChatRequest, hf_client: HuggingFaceClient = Depends(get_agent_manager)): # Reusing dependency check
+    """Handle basic chat requests using the initialized HuggingFaceClient."""
+    if not huggingface_client: # Direct check as dependency might fail silently if service unavailable
+         raise HTTPException(status_code=503, detail="AI service is currently unavailable.")
+    try:
+        response = await huggingface_client.create_chat_completion(
+            messages=request.messages,
+            max_tokens=request.max_tokens,
+            temperature=request.temperature
+        )
+        return response
+    except Exception as e:
+        logger.error(f"Unexpected error in chat endpoint: {str(e)}", exc_info=True)
+        # Use a standard 500 response format
+        return JSONResponse(
+            status_code=500,
+            content={"error": True, "message": "An unexpected server error occurred."}
         )
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Any, Union
 
 # Default parameters for all agents
 DEFAULT_PARAMS = {
-    "model": "gpt-3.5-turbo",
+    "model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
     "temperature": 0.8,
     "max_tokens": 500,
     "top_p": 1.0,
@@ -19,21 +19,21 @@ DEFAULT_PARAMS = {
 
 # Agent-specific parameters (override defaults)
 AGENT_PARAMS: Dict[str, Dict[str, Any]] = {
-    # Philosophers
+    # Existing Philosophers
     "socrates": {
-        "model": "gpt-4",  # Use more advanced model for Socrates
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
         "temperature": 0.7,
         "max_tokens": 400,
         "persona_strength": 1.2,
-        "memory_depth": 8,  # Remember more context for philosophical continuity
-        "debate_style": "maieutic",  # Socratic questioning style
+        "memory_depth": 8,
+        "debate_style": "maieutic",
         "reasoning_framework": "dialectic"
     },
     "nietzsche": {
-        "temperature": 0.9,  # More creative and bold
-        "frequency_penalty": 0.2,  # Reduce repetition
-        "presence_penalty": 0.1,  # Encourage diverse topics
-        "persona_strength": 1.5,  # Strong adherence to Nietzschean style
+        "temperature": 0.9,
+        "frequency_penalty": 0.2,
+        "presence_penalty": 0.1,
+        "persona_strength": 1.5,
         "debate_style": "provocative"
     },
     "alan_watts": {
@@ -43,147 +43,221 @@ AGENT_PARAMS: Dict[str, Dict[str, Any]] = {
         "debate_style": "metaphorical"
     },
     "simone_de_beauvoir": {
-        "model": "gpt-4", 
+        "model": "meta-llama/Llama-3.1-8B-Instruct", 
         "temperature": 0.75,
         "persona_strength": 1.3,
         "debate_style": "analytical",
         "reasoning_framework": "existentialist"
     },
-    
-    # Scientists
-    "einstein": {
-        "model": "gpt-4",
-        "temperature": 0.6,  # More focused and precise
-        "max_tokens": 600,  # Allow for more detailed explanations
-        "persona_strength": 1.2,
-        "debate_style": "thought_experiment",
-        "reasoning_framework": "theoretical_physics"
-    },
-    "newton": {
-        "temperature": 0.5,  # Very methodical
-        "persona_strength": 1.1,
-        "debate_style": "methodical",
-        "reasoning_framework": "mechanistic"
-    },
-    "darwin": {
-        "temperature": 0.7,
-        "persona_strength": 1.2,
-        "debate_style": "observational",
-        "reasoning_framework": "evolutionary"
-    },
-    "feynman": {
-        "model": "gpt-4",
-        "temperature": 0.8,
-        "persona_strength": 1.4,
-        "debate_style": "simplifying_complex",
-        "reasoning_framework": "quantum_physics"
-    },
-    
-    # Tech Visionaries
-    "steve_jobs": {
-        "temperature": 0.8,
-        "persona_strength": 1.5,  # Very strong personality
-        "debate_style": "visionary",
-        "reasoning_framework": "design_thinking"
-    },
-    "sam_altman": {
-        "model": "gpt-4",
-        "temperature": 0.7,
-        "persona_strength": 1.0,
-        "debate_style": "pragmatic",
-        "reasoning_framework": "tech_progressive"
-    },
-    
-    # Devil's Advocate
-    "devil_advocate": {
-        "temperature": 0.9,
-        "frequency_penalty": 0.3,  # Encourage diverse counterpoints
-        "presence_penalty": 0.3,
-        "persona_strength": 1.7,  # Strong contrarian position
-        "debate_style": "contrarian",
-        "reasoning_framework": "critical"
-    },
-    
-    # Expert
-    "expert": {
-        "model": "gpt-4",
-        "temperature": 0.3,  # Very focused on accurate information
-        "max_tokens": 800,  # Allow for more comprehensive answers
-        "persona_strength": 0.8,  # Less focus on persona, more on expertise
-        "debate_style": "authoritative",
-        "reasoning_framework": "evidence_based"
-    },
-    "financial_expert": {
-        "model": "gpt-4",
-        "temperature": 0.4,
-        "max_tokens": 600,
-        "persona_strength": 1.0,
-        "debate_style": "analytical",
-        "reasoning_framework": "financial_analysis"
-    },
-    "data_scientist": {
-        "model": "gpt-4",
-        "temperature": 0.5,
-        "max_tokens": 700,
-        "persona_strength": 1.1,
-        "debate_style": "data_driven",
-        "reasoning_framework": "statistical"
-    },
-    "market_strategist": {
-        "model": "gpt-4",
+
+    # New Philosophers & Skeptics
+    "atlas_vale": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
         "temperature": 0.6,
-        "max_tokens": 650,
+        "max_tokens": 350,
+        "persona_strength": 1.4,
+        "memory_depth": 6,
+        "debate_style": "stoic",
+        "reasoning_framework": "virtue_ethics"
+    },
+    "echo_kismet": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.7,
+        "max_tokens": 400,
+        "persona_strength": 1.3,
+        "memory_depth": 7,
+        "debate_style": "utilitarian",
+        "reasoning_framework": "consequentialist"
+    },
+    "rafe_cipher": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.8,
+        "max_tokens": 450,
+        "persona_strength": 1.5,
+        "memory_depth": 8,
+        "debate_style": "postmodern",
+        "reasoning_framework": "deconstructive"
+    },
+    "vera_volt": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.5,
+        "max_tokens": 400,
         "persona_strength": 1.2,
-        "debate_style": "strategic",
+        "memory_depth": 9,
+        "debate_style": "analytical",
+        "reasoning_framework": "formal_logic"
+    },
+
+    # Science & Futurism Guild
+    "lyra_quark": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.7,
+        "max_tokens": 500,
+        "persona_strength": 1.3,
+        "memory_depth": 7,
+        "debate_style": "quantum",
+        "reasoning_framework": "quantum_mechanics"
+    },
+    "kai_helix": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.8,
+        "max_tokens": 450,
+        "persona_strength": 1.4,
+        "memory_depth": 6,
+        "debate_style": "biohacker",
+        "reasoning_framework": "synthetic_biology"
+    },
+    "nova_verge": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.6,
+        "max_tokens": 500,
+        "persona_strength": 1.2,
+        "memory_depth": 8,
+        "debate_style": "alignment",
+        "reasoning_framework": "ai_safety"
+    },
+
+    # Startup & Strategy Council
+    "jade_loop": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.7,
+        "max_tokens": 400,
+        "persona_strength": 1.3,
+        "memory_depth": 6,
+        "debate_style": "mvp",
+        "reasoning_framework": "lean_startup"
+    },
+    "sabine_flux": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.8,
+        "max_tokens": 450,
+        "persona_strength": 1.4,
+        "memory_depth": 7,
+        "debate_style": "market_vision",
         "reasoning_framework": "market_analysis"
     },
-    "mythical_sage": {
-        "model": "gpt-4",
+    "riot_pulse": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.9,
+        "max_tokens": 400,
+        "persona_strength": 1.5,
+        "memory_depth": 5,
+        "debate_style": "growth_hacking",
+        "reasoning_framework": "viral_marketing"
+    },
+    "nadia_zenith": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.6,
+        "max_tokens": 450,
+        "persona_strength": 1.2,
+        "memory_depth": 8,
+        "debate_style": "operational",
+        "reasoning_framework": "six_sigma"
+    },
+
+    # Creative Story & Design Forge
+    "duke_noir": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.8,
+        "max_tokens": 500,
+        "persona_strength": 1.4,
+        "memory_depth": 7,
+        "debate_style": "noir",
+        "reasoning_framework": "narrative_structure"
+    },
+    "seren_aria": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.9,
+        "max_tokens": 550,
+        "persona_strength": 1.5,
+        "memory_depth": 6,
+        "debate_style": "mythic",
+        "reasoning_framework": "archetypal"
+    },
+    "ava_prism": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
         "temperature": 0.8,
         "max_tokens": 500,
         "persona_strength": 1.3,
-        "debate_style": "mystical",
-        "reasoning_framework": "philosophical"
+        "memory_depth": 7,
+        "debate_style": "cinematic",
+        "reasoning_framework": "visual_storytelling"
     },
-    "fantasy_wizard": {
-        "model": "gpt-4",
+    "haru_pulse": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.7,
+        "max_tokens": 300,
+        "persona_strength": 1.4,
+        "memory_depth": 6,
+        "debate_style": "haiku",
+        "reasoning_framework": "minimalist"
+    },
+
+    # Archetypes & Wildcards
+    "solaris_blaze": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
         "temperature": 0.9,
+        "max_tokens": 450,
+        "persona_strength": 1.6,
+        "memory_depth": 6,
+        "debate_style": "visionary",
+        "reasoning_framework": "optimistic"
+    },
+    "mira_tide": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.7,
+        "max_tokens": 400,
+        "persona_strength": 1.3,
+        "memory_depth": 8,
+        "debate_style": "empathic",
+        "reasoning_framework": "emotional_intelligence"
+    },
+    "coyote_void": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.8,
+        "max_tokens": 400,
+        "persona_strength": 1.5,
+        "memory_depth": 7,
+        "debate_style": "trickster",
+        "reasoning_framework": "paradoxical"
+    },
+    "athena_vox": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.6,
+        "max_tokens": 500,
+        "persona_strength": 1.2,
+        "memory_depth": 9,
+        "debate_style": "strategic",
+        "reasoning_framework": "wisdom"
+    },
+
+    # Legends' Table
+    "ada_lovelace": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.7,
+        "max_tokens": 500,
+        "persona_strength": 1.3,
+        "memory_depth": 8,
+        "debate_style": "analytical",
+        "reasoning_framework": "algorithmic"
+    },
+    "nikola_tesla": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.8,
         "max_tokens": 550,
         "persona_strength": 1.4,
-        "debate_style": "magical",
-        "reasoning_framework": "arcane"
+        "memory_depth": 7,
+        "debate_style": "innovative",
+        "reasoning_framework": "electrical_engineering"
     },
-    "legendary_warrior": {
-        "model": "gpt-4",
-        "temperature": 0.7,
+    "leonardo_da_vinci": {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "temperature": 0.9,
         "max_tokens": 600,
         "persona_strength": 1.5,
-        "debate_style": "courageous",
-        "reasoning_framework": "strategic"
-    },
-    "scorpio": {
-        "model": "gpt-4",
-        "temperature": 0.85,
-        "max_tokens": 500,
-        "persona_strength": 1.6,
-        "debate_style": "intuitive",
-        "reasoning_framework": "emotional"
-    },
-    "visionary": {
-        "model": "gpt-4",
-        "temperature": 0.75,
-        "max_tokens": 650,
-        "persona_strength": 1.7,
-        "debate_style": "forward_thinking",
-        "reasoning_framework": "innovative"
-    },
-    "idealist": {
-        "model": "gpt-4",
-        "temperature": 0.6,
-        "max_tokens": 600,
-        "persona_strength": 1.8,
-        "debate_style": "optimistic",
-        "reasoning_framework": "value_driven"
+        "memory_depth": 8,
+        "debate_style": "polymath",
+        "reasoning_framework": "interdisciplinary"
     }
 }
 
@@ -231,11 +305,103 @@ Points previously challenged:
 {context}
 
 Continue your role as devil's advocate by finding new angles to challenge. Maintain a consistent contrarian stance while avoiding simple repetition of earlier points. Identify additional assumptions or implications that deserve scrutiny.
+""",
+
+    "stoic": """
+Previous reflections:
+{context}
+
+Maintain your stoic composure and focus on virtue, duty, and acceptance. Reference previous insights while developing new perspectives on the nature of human existence and moral responsibility.
+""",
+
+    "utilitarian": """
+Previous calculations:
+{context}
+
+Continue your analysis through the lens of the happiness ledger. Reference previous outcomes while developing new calculations that maximize well-being and minimize suffering.
+""",
+
+    "postmodern": """
+Previous deconstructions:
+{context}
+
+Continue your analysis of power dynamics and shifting narratives. Reference previous insights while developing new perspectives on the constructed nature of reality and knowledge.
+""",
+
+    "quantum": """
+Previous quantum explorations:
+{context}
+
+Maintain your focus on quantum principles and their implications. Reference previous insights while developing new perspectives on the nature of reality at the quantum level.
+""",
+
+    "biohacker": """
+Previous biological insights:
+{context}
+
+Continue your exploration of synthetic biology and human enhancement. Reference previous experiments while developing new approaches to biological optimization.
+""",
+
+    "alignment": """
+Previous AI safety discussions:
+{context}
+
+Maintain your focus on AI alignment and safety considerations. Reference previous insights while developing new perspectives on ensuring beneficial AI development.
+""",
+
+    "startup": """
+Previous entrepreneurial insights:
+{context}
+
+Continue your focus on lean startup principles and MVP development. Reference previous strategies while developing new approaches to product development and market validation.
+""",
+
+    "market_vision": """
+Previous market analyses:
+{context}
+
+Maintain your focus on market dynamics and strategic vision. Reference previous insights while developing new perspectives on market opportunities and challenges.
+""",
+
+    "growth_hacking": """
+Previous growth strategies:
+{context}
+
+Continue your focus on viral growth and user acquisition. Reference previous tactics while developing new approaches to scaling and market penetration.
+""",
+
+    "operational": """
+Previous operational insights:
+{context}
+
+Maintain your focus on efficiency and process optimization. Reference previous improvements while developing new approaches to operational excellence.
+""",
+
+    "creative": """
+Previous creative explorations:
+{context}
+
+Continue your artistic and narrative development. Reference previous works while developing new creative expressions and storytelling approaches.
+""",
+
+    "trickster": """
+Previous paradoxical insights:
+{context}
+
+Maintain your role as a catalyst for change through paradox and contradiction. Reference previous provocations while developing new ways to challenge conventional thinking.
+""",
+
+    "polymath": """
+Previous interdisciplinary insights:
+{context}
+
+Continue your exploration across multiple domains of knowledge. Reference previous connections while developing new syntheses of art, science, and engineering.
 """
 }
 
 # Map agents to their archetype for memory template selection
 AGENT_ARCHETYPE_MAP = {
+    # Existing agents
     "socrates": "philosopher",
     "nietzsche": "philosopher",
     "alan_watts": "philosopher",
@@ -248,33 +414,63 @@ AGENT_ARCHETYPE_MAP = {
     "sam_altman": "visionary",
     "devil_advocate": "devil_advocate",
     "expert": "scientist",
-    "financial_expert": "expert",
-    "data_scientist": "expert",
-    "market_strategist": "expert",
+    "financial_expert": "scientist",
+    "data_scientist": "scientist",
+    "market_strategist": "visionary",
     "mythical_sage": "philosopher",
-    "fantasy_wizard": "philosopher",
-    "legendary_warrior": "philosopher",
+    "fantasy_wizard": "visionary",
+    "legendary_warrior": "visionary",
     "scorpio": "philosopher",
-    "visionary": "philosopher",
-    "idealist": "philosopher"
+    "visionary": "visionary",
+    "idealist": "philosopher",
+
+    # New Philosophers & Skeptics
+    "atlas_vale": "stoic",
+    "echo_kismet": "utilitarian",
+    "rafe_cipher": "postmodern",
+    "vera_volt": "philosopher",
+
+    # Science & Futurism Guild
+    "lyra_quark": "quantum",
+    "kai_helix": "biohacker",
+    "nova_verge": "alignment",
+
+    # Startup & Strategy Council
+    "jade_loop": "startup",
+    "sabine_flux": "market_vision",
+    "riot_pulse": "growth_hacking",
+    "nadia_zenith": "operational",
+
+    # Creative Story & Design Forge
+    "duke_noir": "creative",
+    "seren_aria": "creative",
+    "ava_prism": "creative",
+    "haru_pulse": "creative",
+
+    # Archetypes & Wildcards
+    "solaris_blaze": "visionary",
+    "mira_tide": "philosopher",
+    "coyote_void": "trickster",
+    "athena_vox": "philosopher",
+
+    # Legends' Table
+    "ada_lovelace": "scientist",
+    "nikola_tesla": "scientist",
+    "leonardo_da_vinci": "polymath"
 }
 
 def get_agent_params(agent_id: str) -> Dict[str, Any]:
-    """Get the complete parameters for a specific agent."""
-    # Start with default parameters
+    """Get the parameters for a specific agent, with defaults applied"""
+    agent_params = AGENT_PARAMS.get(agent_id, {})
     params = DEFAULT_PARAMS.copy()
-    
-    # Override with agent-specific parameters if they exist
-    if agent_id in AGENT_PARAMS:
-        params.update(AGENT_PARAMS[agent_id])
-    
+    params.update(agent_params)
     return params
 
 def get_few_shot_examples(agent_id: str) -> List[Dict[str, str]]:
-    """Get few-shot examples for a specific agent if available."""
+    """Get few-shot examples for a specific agent"""
     return FEW_SHOT_EXAMPLES.get(agent_id, [])
 
 def get_memory_template(agent_id: str) -> str:
-    """Get the appropriate memory template for an agent."""
+    """Get the memory template for a specific agent"""
     archetype = AGENT_ARCHETYPE_MAP.get(agent_id, "philosopher")
     return MEMORY_TEMPLATES.get(archetype, MEMORY_TEMPLATES["philosopher"]) 

@@ -88,7 +88,9 @@ export const apiCall = async (endpoint, method = 'GET', data = null) => {
   let apiEndpoint = endpoint;
   if (isGitHubPages || getCurrentUser()?.isGuest) {
     // Replace authenticated endpoints with public ones
-    if (endpoint === '/seminar') {
+    if (endpoint === '/api/socratic') {
+      apiEndpoint = '/public/seminar';
+    } else if (endpoint === '/seminar') {
       apiEndpoint = '/public/seminar';
     } else if (endpoint === '/continue') {
       apiEndpoint = '/public/continue';
@@ -124,7 +126,7 @@ export const apiCall = async (endpoint, method = 'GET', data = null) => {
     console.log(`Making API request to ${url}`, { 
       method, 
       headers: options.headers,
-      data 
+      data: data ? JSON.stringify(data).substring(0, 100) + '...' : null 
     });
     
     // Add timeout to fetch requests
@@ -163,7 +165,7 @@ export const apiCall = async (endpoint, method = 'GET', data = null) => {
     } else {
       // For local development
       errorMessage = `Failed to connect to backend at ${baseUrl}. ` +
-        'Please make sure your backend server is running.';
+        'Please make sure your backend server is running on port 8002 using: cd backend && python -m uvicorn app:app --port 8002';
     }
     
     const newError = new Error(errorMessage);
