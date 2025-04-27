@@ -22,7 +22,6 @@ wheels/
 venv/
 .env
 .env.example
-requirements.txt
 
 # Node
 node_modules/
