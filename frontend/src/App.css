@@ -232,6 +232,9 @@ body {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  scroll-behavior: smooth;
+  scroll-padding-bottom: 110px; /* Ensures content doesn't get hidden under the input */
+  overflow-anchor: none; /* Prevents scroll position from being affected by content changes */
 }
 
 .chat-container.no-messages {
@@ -250,6 +253,14 @@ body {
   padding: 20px;
   background: rgba(0, 0, 0, 0.2);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.1);
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  transform: translateZ(0); /* Force hardware acceleration */
+  will-change: transform;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .input-form {
@@ -1719,4 +1730,57 @@ textarea.input-control {
   100% {
     box-shadow: 0 0 0 0 rgba(97, 27, 248, 0);
   }
+}
+
+/* Floating Input Bar */
+.input-container {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.1);
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  transform: translateZ(0); /* Force hardware acceleration */
+  will-change: transform;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark .input-container {
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.input-container::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.07), transparent);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.dark .input-container::before {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.2), transparent);
+}
+
+.input-textarea {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(0);
+}
+
+.input-textarea:focus {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.dark .input-textarea:focus {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(99, 102, 241, 0.2);
+}
+
+/* Ensure proper scrolling with fixed input */
+.chat-container {
+  scroll-behavior: smooth;
+  scroll-padding-bottom: 110px; /* Ensures content doesn't get hidden under the input */
+  overflow-anchor: none; /* Prevents scroll position from being affected by content changes */
 } 

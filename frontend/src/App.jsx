@@ -130,7 +130,21 @@ function App() {
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
       requestAnimationFrame(() => {
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        const chatContainer = chatContainerRef.current;
+        if (chatContainer) {
+          // Calculate the scroll position to account for the fixed input bar
+          const scrollHeight = chatContainer.scrollHeight;
+          const clientHeight = chatContainer.clientHeight;
+          const bottomPadding = 140; // Extra padding to ensure messages aren't hidden behind input
+          
+          chatContainer.scrollTo({
+            top: scrollHeight - clientHeight + bottomPadding,
+            behavior: 'smooth'
+          });
+        } else {
+          // Fallback to the old method if chat container not found
+          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
       });
     }
   };
@@ -661,7 +675,7 @@ IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
 
   // Toggle personas bin
   const togglePersonasBin = () => {
-    setShowAgentSelector(prev => !prev);
+    setShowPersonasBin(prev => !prev);
   };
 
   // Get filtered mention suggestions based on search text
@@ -915,7 +929,7 @@ IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
       }}>
         {/* Main chat area with centered content */}
         <div className="flex-1 flex flex-col" onClick={(e) => e.stopPropagation()}>
-          <div className="max-w-2xl mx-auto w-full px-4 flex-1 overflow-y-auto" ref={chatContainerRef}>
+          <div className="max-w-2xl mx-auto w-full px-4 flex-1 overflow-y-auto pb-24 chat-container" ref={chatContainerRef}>
             {!hasMessages ? (
               // Virtual roundtable - minimalist redesign with gradients
               <div className="w-full mb-8 mt-12">
@@ -1072,16 +1086,16 @@ IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
             )}
           </div>
 
-          {/* Input area with gradients and updated debate button */}
-          <div className={`border-t backdrop-blur-xl transition-colors duration-300 ${darkMode ? 'border-gray-800 bg-black/70' : 'border-[#B0A395]/30 bg-[#E8E1D9]/60'}`}>
+          {/* Input area with gradients and updated debate button - now fixed at bottom with glassy effect */}
+          <div className={`fixed bottom-0 left-0 right-0 border-t input-container transition-colors duration-300 ${darkMode ? 'border-gray-800/40 bg-black/60' : 'border-[#B0A395]/30 bg-[#E8E1D9]/60'}`}>
             <div className="max-w-2xl mx-auto px-4 py-3">
               <form className="relative" onSubmit={handleSubmit}>
                 <textarea
                   ref={inputRef}
-                  className={`w-full resize-none rounded-xl px-4 pr-24 py-3 border backdrop-blur-lg focus:ring-1 outline-none transition-all shadow-sm ${
+                  className={`w-full resize-none rounded-xl px-4 pr-24 py-3 border input-textarea backdrop-blur-lg focus:ring-2 outline-none transition-all shadow-lg ${
                     darkMode 
-                      ? 'bg-gradient-to-br from-gray-900/80 to-gray-800/80 border-gray-800 focus:border-indigo-900/60 focus:ring-indigo-900/30 placeholder-gray-500 text-indigo-100' 
-                      : 'bg-gradient-to-br from-[#E8E1D9]/60 to-[#D8CFC5]/60 border-[#B0A395]/40 focus:border-[#B0A395]/60 focus:ring-[#B0A395]/30 placeholder-[#67473B]/60 text-[#67473B]'
+                      ? 'bg-gradient-to-br from-gray-900/60 to-gray-800/60 border-gray-800/60 focus:border-indigo-800/60 focus:ring-indigo-900/30 placeholder-gray-500 text-indigo-100' 
+                      : 'bg-gradient-to-br from-[#E8E1D9]/70 to-[#D8CFC5]/70 border-[#B0A395]/30 focus:border-[#B0A395]/60 focus:ring-[#B0A395]/30 placeholder-[#67473B]/60 text-[#67473B]'
                   }`}
                   placeholder={selectedPersonas.length === 0 
                     ? "Select personas to begin..." 
@@ -1328,7 +1342,7 @@ IMPORTANT CHARACTER CONSISTENCY INSTRUCTIONS:
 
       <AgentSelector 
         isOpen={showAgentSelector}
-        onClose={togglePersonasBin}
+        onClose={() => setShowAgentSelector(false)}
         selectedAgents={selectedPersonas}
         onSelectAgent={handleAgentSelect}
       />
